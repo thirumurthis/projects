@@ -1,0 +1,14 @@
+apiVersion: greet.greetapp.com/v1alpha1
+kind: Greet
+metadata:
+  labels:
+    app.kubernetes.io/name: greet
+    app.kubernetes.io/instance: greet-sample
+    app.kubernetes.io/part-of: app-op
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: app-op
+  name: greet-sample
+spec:
+  # TODO(user): Add fields here
+  name: first-app
+

@@ -1,0 +1,31 @@
+# permissions for end users to edit greets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: greet-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: app-op
+    app.kubernetes.io/part-of: app-op
+    app.kubernetes.io/managed-by: kustomize
+  name: greet-editor-role
+rules:
+- apiGroups:
+  - greet.greetapp.com
+  resources:
+  - greets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - greet.greetapp.com
+  resources:
+  - greets/status
+  verbs:
+  - get
