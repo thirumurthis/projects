@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - greet.greetapp.com
+  resources:
+  - greets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - greet.greetapp.com
+  resources:
+  - greets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - greet.greetapp.com
+  resources:
+  - greets/status
+  verbs:
+  - get
+  - patch
+  - update
