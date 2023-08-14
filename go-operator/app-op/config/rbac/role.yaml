@@ -8,6 +8,18 @@ rules:
 - apiGroups:
   - greet.greetapp.com
   resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - greet.greetapp.com
+  resources:
   - greets
   verbs:
   - create
@@ -29,5 +41,15 @@ rules:
   - greets/status
   verbs:
   - get
+  - patch
+  - update
+- apiGroups:
+  - greet.greetapp.com
+  resources:
+  - pods
+  verbs:
+  - create
+  - get
+  - list
   - patch
   - update
