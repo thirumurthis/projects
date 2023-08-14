@@ -11,4 +11,30 @@ metadata:
 spec:
   # TODO(user): Add fields here
   name: first-app
-
+  deployment:
+    name: app
+    replicas: 1
+    pod:
+      image: thirumurthi/app:v1
+      imagePullPolicy: Always
+      mountName: app-mount
+      mountPath: /opt/app
+      podPort: 8080
+        #command: ["java","-jar","app.jar","--spring.config.location=file://opt/app/application.yaml"]
+      command: ["java"]
+      args: ["-jar","app.jar","--spring.config.location=file:/opt/app/application.yaml"]
+    config: 
+      name: app
+      fileName: application.yaml
+      data: |
+        env.name: Kubernetes-k8s-000
+    service:
+      name: app
+      spec:
+        selector:
+          name: first-app
+        ports:
+        - name: svc-port
+          protocol: TCP
+          port: 80
+          targetPort: 8080

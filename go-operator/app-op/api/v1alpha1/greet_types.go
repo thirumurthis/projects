@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,9 +30,39 @@ type GreetSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	//Name of the resource
-	// +kubebuilder:validation:MaxLength=15
+	// +kubebuilder:validation:MaxLength=25
 	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
+	Name       string     `json:"name"`
+	Deployment Deployment `json:"deployment"`
+}
+
+type Deployment struct {
+	Name      string  `json:"name"`
+	Pod       PodInfo `json:"pod"`
+	Replicas  int32   `json:"replicas,omitempty"`
+	ConfigMap Config  `json:"config,omitempty"`
+	Service   Service `json:"service,omitempty"`
+}
+
+type Config struct {
+	Name     string `json:"name,omitempty"`
+	FileName string `json:"fileName,omitempty"`
+	Data     string `json:"data,omitempty"`
+}
+
+type PodInfo struct {
+	Image           string   `json:"image"`
+	ImagePullPolicy string   `json:"imagePullPolicy,omitempty"`
+	MountName       string   `json:"mountName,omitempty"`
+	MountPath       string   `json:"mountPath,omitempty"`
+	PodPort         int32    `json:"podPort,omitempty"`
+	Command         []string `json:"command,omitempty"`
+	Args            []string `json:"args,omitempty"`
+}
+
+type Service struct {
+	Name string             `json:"name,omitempty"`
+	Spec corev1.ServiceSpec `json:"spec,omitempty"`
 }
 
 // GreetStatus defines the observed state of Greet
