@@ -1252,4 +1252,22 @@ spec:
         name: app-controller
 ```
 
-### 
+- In case if the there are exception deploying the operator or controller, we need to create a ServiceAccount
+
+The exception message,
+
+```
+E0816 03:51:14.671318       1 reflector.go:148] pkg/mod/k8s.io/client-go@v0.27.4/tools/cache/reflector.go:231: Failed to watch *v1alpha1.Greet: failed to list *v1alpha1.Greet: greets.greet.greetapp.com is forbidden: User "system:serviceaccount:default:default" cannot list resource "greets" in API group "greet.greetapp.com" at the cluster scope
+```
+
+- We need to create the service account
+```
+kubectl create clusterrole deployer --verb=get,list,watch,create,delete,patch,update --resource=deployments.apps
+kubectl create clusterrolebinding deployer-srvacct-default-binding --clusterrole=deployer --serviceaccount=default:default
+```
+
+
+- The deployed resources looks like below,
+![image](https://github.com/thirumurthis/projects/assets/6425536/fbe560a4-0cf7-4691-9bff-eecae614298b)
+
+
