@@ -5,7 +5,7 @@ Following this [operator-sdk blog](https://thirumurthi.hashnode.dev/extend-kuber
 Pre-requesites:
  - KinD CLI installed and Cluster running
  - WSL2 installed 
- - GoLang installed in WSL12
+ - GoLang installed in WSL2
  - Operator-SDK cli installed in WSL2
 
 In order to demonstrate the operator-sdk usage, we have a simple SpringBoot application which exposes an simple endpoint at 8080.
