@@ -689,6 +689,57 @@ spec:
 ```
 
 - From the WSL2, issue `make generate manifests install run` will deploy the controller to KinD cluster.
+- Operator log once the sample manifests is deployed
+![image](https://github.com/thirumurthis/projects/assets/6425536/d296ea1a-e8e8-48ff-9684-5bfc721f2e2f)
+
+- Below is the sample Custom Resource manifests, which is deployed once the controller and CRD's are deployed.
+
+```yaml
+apiVersion: greet.greetapp.com/v1alpha1
+kind: Greet
+metadata:
+  labels:
+    app.kubernetes.io/name: greet
+    app.kubernetes.io/instance: greet-sample
+    app.kubernetes.io/part-of: app-op
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: app-op
+  name: greet-sample
+spec:
+  # TODO(user): Add fields here
+  name: first-app
+  deployment:
+    name: app
+    replicas: 1
+    pod:
+      image: thirumurthi/app:v1
+      imagePullPolicy: Always
+      mountName: app-mount
+      mountPath: /opt/app
+      podPort: 8080
+      command: ["java"]
+      args: ["-jar","app.jar","--spring.config.location=file:/opt/app/application.yaml"]
+    config: 
+      name: app
+      fileName: application.yaml
+      data: |
+        env.name: k8s-kind-dev-env
+        greeting.source: from-k8s-configMap
+    service:
+      name: app
+      spec:
+        selector:
+          name: first-app
+        ports:
+        - name: svc-port
+          protocol: TCP
+          port: 80
+          targetPort: 8080
+
+```
+
+- Once application is up, with the nginx pod we can hit the endpoint and below is the output
+![image](https://github.com/thirumurthis/projects/assets/6425536/c0658ac8-04b2-46b2-be79-d334b35cb03a)
 
 
 - Below command is used to build and deploy the image to docker hub
