@@ -1071,16 +1071,7 @@ spec:
                                     is defined on this service.
                                   type: string
                                 nodePort:
-                                  description: 'The port on each node on which this
-                                    service is exposed when type is NodePort or LoadBalancer.  Usually
-                                    assigned by the system. If a value is specified,
-                                    in-range, and not in use it will be used, otherwise
-                                    the operation will fail.  If not specified, a
-                                    port will be allocated if this Service requires
-                                    one.  If this field is specified when creating
-                                    a Service which does not need it, creation will
-                                    fail. This field will be wiped when updating a
-                                    Service to no longer need it (e.g. changing type
+                                  description: 'Service to no longer need it (e.g. changing type
                                     from NodePort to ClusterIP). More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport'
                                   format: int32
                                   type: integer
@@ -1168,23 +1159,7 @@ spec:
                                 type: object
                             type: object
                           type:
-                            description: 'type determines how the Service is exposed.
-                              Defaults to ClusterIP. Valid options are ExternalName,
-                              ClusterIP, NodePort, and LoadBalancer. "ClusterIP" allocates
-                              a cluster-internal IP address for load-balancing to
-                              endpoints. Endpoints are determined by the selector
-                              or if that is not specified, by manual construction
-                              of an Endpoints object or EndpointSlice objects. If
-                              clusterIP is "None", no virtual IP is allocated and
-                              the endpoints are published as a set of endpoints rather
-                              than a virtual IP. "NodePort" builds on ClusterIP and
-                              allocates a port on every node which routes to the same
-                              endpoints as the clusterIP. "LoadBalancer" builds on
-                              NodePort and creates an external load-balancer (if supported
-                              in the current cloud) which routes to the same endpoints
-                              as the clusterIP. "ExternalName" aliases this service
-                              to the specified externalName. Several other fields
-                              do not apply to ExternalName services. More info: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types'
+                            description: 'do not apply to ExternalName services. More info: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types'
                             type: string
                         type: object
                     type: object
