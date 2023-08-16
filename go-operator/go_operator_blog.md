@@ -1217,7 +1217,34 @@ spec:
 ```
 
 - Below command is used to build and deploy the image to docker hub
+
 ```
  make docker-build docker-push IMG=thirumurthi/app-op:v1
 ```
+
+- The controller image pushed can be used to deploy
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    name: operator-controller
+  name: app-controller
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: app-controller
+  template:
+    metadata:
+      labels:
+        name: app-controller
+    spec:
+      containers:
+      - image: thirumurthi/app-op:v1
+        name: app-controller
+```
+
 
