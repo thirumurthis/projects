@@ -688,11 +688,12 @@ spec:
           targetPort: 8080
 ```
 
-- From the WSL2, issue `make generate manifests install run` will deploy the controller to KinD cluster.
-- Operator log once the sample manifests is deployed
+- During local development, from the operator-sdk project, form WSL2 issue  `make generate manifests install run` to deploy the controller to KinD cluster. The command will display the logs and once we deploy the sample Custom Resource (like in below code snippet). The log should display the message logged in the Reconcilde code. Below snapshot where the deployment info is printed in console.
+  
 ![image](https://github.com/thirumurthis/projects/assets/6425536/d296ea1a-e8e8-48ff-9684-5bfc721f2e2f)
 
-- Below is the sample Custom Resource manifests, which is deployed once the controller and CRD's are deployed.
+- Sample Custom Resource manifests, save this content in a file and issue `kubectl apply -f <file-name-with-content>.yaml` to deploy the resources.
+- In below the deployment has pod, config, service sections. The reconcile code will use these values to deploy them in Kuberented cluster.
 
 ```yaml
 apiVersion: greet.greetapp.com/v1alpha1
@@ -738,10 +739,10 @@ spec:
 
 ```
 
-- Once application is up, with the nginx pod we can hit the endpoint and below is the output
+- Once application is up, with the nginx pod we can hit the endpoint and the repsonce will look like in below snapshot
 ![image](https://github.com/thirumurthis/projects/assets/6425536/c0658ac8-04b2-46b2-be79-d334b35cb03a)
 
-- The CRD generated is
+- The CRD generated in the operator project looks like below
 
 ```yaml
 ---
@@ -1216,13 +1217,17 @@ spec:
       status: {}
 ```
 
-- Below command is used to build and deploy the image to docker hub
+### Creating an image for the operator or controller changes.
+- With the below command from operator-sdk project the controller image can be created and pushed to Docker.
 
 ```
  make docker-build docker-push IMG=thirumurthi/app-op:v1
 ```
 
-- The controller image pushed can be used to deploy
+### To deploy the Controller, CRD and CR from manifest to production like environment.
+
+- Below is the deployment manifest which uses the operator or controller image from dockerhub, we can deploy this to Kuberentes cluster.
+- Following the operator deployment, we can deploy the CRD and the CR. 
 
 ```yaml
 apiVersion: apps/v1
@@ -1247,4 +1252,4 @@ spec:
         name: app-controller
 ```
 
-
+### 
