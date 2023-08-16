@@ -1,28 +1,32 @@
+In this blog have created an example of how operator-sdk can be used to deploy a SpringBoot application to Kubernetes cluster.
 
-Following the operator-sdk blog, in this blog will detail how we can use operator framework to deploy a simple spring boot application in Kuberentes cluster.
+Following this [operator-sdk blog](https://thirumurthi.hashnode.dev/extend-kubernetes-api-with-operator-sdk), this article briefly shows the Go code to programatically create the manifests and deploy to K8S cluster.
 
 Pre-requesites:
- - KinD CLI installed
+ - KinD CLI installed and Cluster running
  - WSL2 installed 
- - GoLang installed
- - Operator-SDK cli
+ - GoLang installed in WSL12
+ - Operator-SDK cli installed in WSL2
 
-The SpringBoot application is a simple app which expose as end-point which will read the a value passed in the configuration. For example, if the configuration is added to application.yaml it will be fetched and displayed.
+In order to demonstrate the operator-sdk usage, we have a simple SpringBoot application which exposes an simple endpoint at 8080.
+The endpoint will read the value from the configuration file `application.yaml` or if the values passed via environment variables.
 
-The workflow,
+Create image of the SpringBoot application
+   - Build the jar for the SpringBoot application, using `maven clean install`. 
+   - Create a Dockerfile to convert the jar artifact to image and push it to Dockerhub.
 
-### Building the app and pushing the images
-  - First the SpringBoot applicaton Jar should be built
-  - The Dockerfile will convert the Jar to image and it will be pushed to Docker hub.
+1. Conventional way of deploying the image to Kubernetes (without operator-sdk)
+  - Create different manifests
+        - ConfigMap
+        - Service
+        - Deployment (mount the ConfigMap as a volume)
 
-### Deploying the image without operator-sdk
-  - We will create a set of manifests - Deployment, Service and ConfigMap
+2. Operator-Sdk approach
+  - Once the project is scaffold and initalized, we need to update the `*types.go` file generated. This file will be used to generate the CRD yaml. Which can be generated when using the `make generate manifests`, from the WSL2 terminal.
+  - The Reconciler logic needs to be updated, in this case we use the `k8s.io` library to create ConfigMap, Service and Deployment GoLang objects. In the reconciler logic, we simply create the resource if not found, else we update it.
 
-### With Operator-SDK we can create a Custom Resource Definition which will include all the resource in a single Custom Resource Yaml file.
 
-- The operator-sdk scafolded project will generate a *type.go file which includes set of Go Structs constructs used to define the CRD manifests.
-
-SpringBoot application entry point code
+- Below is the SpringBoot application entry point 
 
 ```java
 package com.app.app;
@@ -63,7 +67,7 @@ public class AppApplication {
 }
 ```
 
-- Simple configuration class
+- Simple configuration class, to read the application.yaml when application context is loaded by Spring
 
 ```java
 package com.app.app;
@@ -103,27 +107,25 @@ public class GreetConfiguration {
 	</properties>
 
 	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
+	    <dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-web</artifactId>
+	   </dependency>
+           <dependency>
+		<groupId>org.projectlombok</groupId>
+		<artifactId>lombok</artifactId>
+		<optional>true</optional>
+	    </dependency>
+            <dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-web</artifactId>
+	    </dependency>
+	    <dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-test</artifactId>
+		<scope>test</scope>
+	    </dependency>
 	</dependencies>
-
 	<build>
 		<plugins>
 			<plugin>
@@ -147,34 +149,33 @@ public class GreetConfiguration {
 </project>
 ```
 
-- Leave the application.properties file empty
+- Leave the application.properties file empty when building the jar.
 
 - Dockerfile 
 ```Dockerfile
 FROM eclipse-temurin:17-jdk-alpine
-#VOLUME /tmp
 ARG JAR_FILE
 COPY ${JAR_FILE} app.jar
-#--spring.config.location=file://{file-path}/application.properties
 ENTRYPOINT ["java","-jar","/app.jar"]
 ```
 
-- Issuing `mvn clean install` will generate the jar file in `target\` folder
+- To create the jar file,  issuing `mvn clean install`. The jar file will be created in `target\` folder.
 
-- To build the docker image, use below command
+- Once the Jar file is generated, to build the docker image we can issue below command.
+
 ```
 docker build --build-arg JAR_FILE=target/*.jar -t local/app .
 ```
 
-- Once the image is build, to run the SpringBoot application we can use the below  command.
-- The `env.name` value is passed as docker environment variable `ENV_NAME` 
-- Once container is up and ready, the endpoint `http://localhost:8080/api/hello?name=test` should return response
+- Once the image is build, to run the SpringBoot application in Docker Desktop, use the below  command.
+     - The `env.name` value is passed as docker environment variable `ENV_NAME`.
+     - After the container is ready, the endpoint `http://localhost:8080/api/hello?name=test` should return response
 
 ```
 docker run --name app -e ENV_NAME="docker-env" -p 8080:8080 -d local/app:latest
 ```
 
-- output 
+- The output of the application when hitting the endpoint
 
 ```
 $ curl -i http://localhost:8080/api/hello?name=test
@@ -187,13 +188,15 @@ Date: Tue, 15 Aug 2023 03:36:14 GMT
 
 ```
 
-- When running below docker command, with GREETING_SOURCE this value should be fetched from the docker env.
+- With below docker command, additional environment variable GREETING_SOURCE is passed with value, the output section is how the response looks like.
 
 ```
 docker run --name app -e ENV_NAME="docker-env" -e GREETING_SOURCE="from-docker-cli" -p 8080:8080 -d local/app:latest
 
 ```
-- output
+
+- Output
+ 
 ```
 $ curl -i http://localhost:8080/api/hello?name=test                                
 HTTP/1.1 200 
@@ -204,14 +207,13 @@ Date: Tue, 15 Aug 2023 03:40:40 GMT
 {"content":"Hello test!","source":"FROM-DOCKER-CLI-docker-env"}
 ```
 
-
-Once validate the image can be pushed to the dockerhub
+- To push the the images to the Dockerhub, use below command, the repository name would be the name 
 
 ```
 docker build --build-arg JAR_FILE=target/*.jar -t <repoistory-name>/app:v1 .
 ```
 
-## Once the image is available, the deployment manifest to deploy in Kubernetes looks like below
+## Once the image is available, below is just the deployment manifest that can be deployed to Kubernetes
 
 ```yaml
 apiVersion: apps/v1
@@ -250,7 +252,9 @@ spec:
         name: app-mount-vol
 ```
 
-### once the operator-sdk code is scaffolded and initialized, the types.go looks like below
+## Operator-sdk framework with the custom resource definition changes
+
+- Below is the  `*types.go` file, most of the datatype is go struct. The service struct includes, a `corev1.ServiceSpec`.
 
 ```go
 package v1alpha1
@@ -334,25 +338,9 @@ func init() {
 }
 ```
 
-## The controller code 
+- Below is the controller code, where `Reconcile()` calls the function to create the Service, ConfigMap and Deployment.
 
 ```go
-/*
-Copyright 2023.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controllers
 
 import (
@@ -699,6 +687,9 @@ spec:
           port: 80
           targetPort: 8080
 ```
+
+- From the WSL2, issue `make generate manifests install run` will deploy the controller to KinD cluster.
+
 
 - Below command is used to build and deploy the image to docker hub
 ```
