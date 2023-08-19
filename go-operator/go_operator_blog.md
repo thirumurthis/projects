@@ -1,32 +1,207 @@
-In this blog have created an example of how operator-sdk can be used to deploy a SpringBoot application to Kubernetes cluster.
+## Operator pattern to deploy SpringBoot application
+ 
+In this article we will be using Operator SDK to create Custom Resource Definition (CRD) and Controller logic to deploy a Spring application in Kubernetes cluster.
 
-Following this [operator-sdk blog](https://thirumurthi.hashnode.dev/extend-kubernetes-api-with-operator-sdk), this article briefly shows the Go code to programatically create the manifests and deploy to K8S cluster.
+With reference to my previous [operator-sdk blog](https://thirumurthi.hashnode.dev/extend-kubernetes-api-with-operator-sdk), we will use the same scaffolded and initialized project structure to create the CRD and reconcile logic. The reconciler logic will programmatically create Kubernetes resources object (using k8s.io/core libraries) like Deployment, ConfigMap, Service and deploy them to the cluster.
 
-Pre-requesites:
+Pre-requisites:
+ - Basic understanding of Kubernetes
  - KinD CLI installed and Cluster running
  - WSL2 installed 
  - GoLang installed in WSL2
  - Operator-SDK cli installed in WSL2
 
-In order to demonstrate the operator-sdk usage, we have a simple SpringBoot application which exposes an simple endpoint at 8080.
-The endpoint will read the value from the configuration file `application.yaml` or if the values passed via environment variables.
+To demonstrate the use of Operator SDK in design and create CRD, update reconcile logic and deployment workflow - created a SpringBoot application that exposes an end point in 8080 port. This end point will render the response by reading the value from configuration file or environment variable.
 
-Create image of the SpringBoot application
-   - Build the jar for the SpringBoot application, using `maven clean install`. 
-   - Create a Dockerfile to convert the jar artifact to image and push it to Dockerhub.
+What are the resources used for deploying Spring application?
 
-1. Conventional way of deploying the image to Kubernetes (without operator-sdk)
-  - Create different manifests
-        - ConfigMap
-        - Service
-        - Deployment (mount the ConfigMap as a volume)
+- ConfigMap
+        - The application.yaml content is deployed as ConfigMap resource. The deployment manifest should mount the ConfigMap as volume, so Spring application can access it. The mounted configMap is passed as external configuration, using `--spring.config.location` option when starting the Spring application. For more details refer the Kubernetes documentation.
+- Deployment 
+    - The deployment will deploy the Spring application in the container.
+- Service
+     - The service created will forward traffic to 8080 port.
 
-2. Operator-Sdk approach
-  - Once the project is scaffold and initalized, we need to update the `*types.go` file generated. This file will be used to generate the CRD yaml. Which can be generated when using the `make generate manifests`, from the WSL2 terminal.
-  - The Reconciler logic needs to be updated, in this case we use the `k8s.io` library to create ConfigMap, Service and Deployment GoLang objects. In the reconciler logic, we simply create the resource if not found, else we update it.
+### Operator pattern key components
 
+- Custom Resource Definition (CRD), Custom Resource (CR) and Controller/Operator are the key components
+- CRD & CR 
+   - Custom Resource Definition (CRD) and Custom Resource (CR) plays a crucial part and should be designed based on requirements.
+   - The Kubernetes API can be extended with Custom Resource Definition (CRD), this defines the schema for the Custom Resource (CR).
+   - Once the CRD is defined we can create an instance of the Custom Resource.
 
-- Below is the SpringBoot application entry point 
+- Controller
+   - The controller in Operator SDK is responsible for watching for events and reconciling the Custom Resource (CR) to desire state based on logic defined in  reconciliation flow. Without controller just deploying the CRD to cluster doesn't do anything.
+
+### Using Operator SDK
+
+With Operator SDK we can design and define the Customer Resource Definition (CRD) with corresponding reconciler logic. Part of the reconcile logic we can deploy different Kubernetes resources.
+
+#### Design 
+
+The `spec` section in the Custom Resource (CR) is the design starting point, the properties that are required to deploy the application goes under this section.
+
+In the below Custom Resource (CR) snippet, the `spec` section includes `name` and `deployment` properties. The `deployment` section further includes `name`, `pod`, `config` and `service` section.
+- The `pod` section includes the properties related to Pod manifest,  like image, container port, etc. This will be read in the reconciler logic in Operator SDK project and a deployment object will be created to be deployed in cluster.
+- The `config` section will include the data to create the ConfigMap resource.
+- The `service` section include `name` and `spec`. The `spec` section in the `api/v1alpha1/*type.go` uses the k8s.io/core library object, so we can use the regular Service manifest properties like `port`, `targetPort`, etc.
+
+- Below is the Custom Resource (CR) used to deploy the Spring application.
+- By reading further we will see how this file is being deployed.
+
+```yaml
+apiVersion: greet.greetapp.com/v1alpha1
+kind: Greet
+metadata:
+  labels:
+    app.kubernetes.io/name: greet
+    app.kubernetes.io/instance: greet-sample
+    app.kubernetes.io/part-of: app-op
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: app-op
+  name: greet-sample
+spec:
+  name: first-app
+  deployment:
+    name: app
+    replicas: 1
+    pod:
+      image: thirumurthi/app:v1
+      imagePullPolicy: Always
+      mountName: app-mount
+      mountPath: /opt/app
+      podPort: 8080
+      command: ["java"]
+      args: ["-jar","app.jar","--spring.config.location=file:/opt/app/application.yaml"]
+    config: 
+      name: app
+      fileName: application.yaml
+      data: |
+        env.name: k8s-kind-dev-env
+        greeting.source: from-k8s-configMap
+    service:
+      name: app
+      spec:
+        selector:
+          name: first-app
+        ports:
+        - name: svc-port
+          protocol: TCP
+          port: 80
+          targetPort: 8080
+```
+
+- With reference to the CR above, we can compare it with the Operator SDK generated `api/v1alpha1/*type.go` file content where we can easily follow the pattern.
+
+Note:-
+  - The `api/v1alpha1/*type.go` file includes different Go struct data types defined which will in a way used in the Custom Resource YAML.
+  - `pod` and `config` a custom Go struct datatype is defined.
+  - In `service`, the `spec` uses the k8s.io/core api *corev1.ServiceSpec* with which we can specify regular Service manifest properties.
+
+```go
+package v1alpha1
+
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// GreetSpec defines the desired state of Greet
+type GreetSpec struct {
+	//Name of the resource
+	// +kubebuilder:validation:MaxLength=25
+	// +kubebuilder:validation:MinLength=1
+	Name       string     `json:"name"`
+	Deployment Deployment `json:"deployment"`
+}
+
+type Deployment struct {
+	Name      string  `json:"name"`
+	Pod       PodInfo `json:"pod"`
+	Replicas  int32   `json:"replicas,omitempty"`
+	ConfigMap Config  `json:"config,omitempty"`
+	Service   Service `json:"service,omitempty"`
+}
+
+type Config struct {
+	Name     string `json:"name,omitempty"`
+	FileName string `json:"fileName,omitempty"`
+	Data     string `json:"data,omitempty"`
+}
+
+type PodInfo struct {
+	Image           string   `json:"image"`
+	ImagePullPolicy string   `json:"imagePullPolicy,omitempty"`
+	MountName       string   `json:"mountName,omitempty"`
+	MountPath       string   `json:"mountPath,omitempty"`
+	PodPort         int32    `json:"podPort,omitempty"`
+	Command         []string `json:"command,omitempty"`
+	Args            []string `json:"args,omitempty"`
+}
+
+type Service struct {
+	Name string             `json:"name,omitempty"`
+	Spec corev1.ServiceSpec `json:"spec,omitempty"`
+}
+
+// GreetStatus defines the observed state of Greet
+type GreetStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	Status string `json:"status,omitempty"`
+}
+
+//Don't leave any space between the marker
+
+//+kubebuilder:object:root=true
+//+kubebuilder:printcolumn:name="APPNAME",type="string",JSONPath=".spec.name",description="Name of the app"
+//+kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.status",description="Status of the app"
+//+kubebuilder:subresource:status
+// +operator-sdk:gen-csv:customresourcedefinitions.displayName="Greet App"
+// +operator-sdk:gen-csv:customresourcedefinitions.resources="Deployment,v1,\"A Kubernetes Deployment of greet app\""
+
+type Greet struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   GreetSpec   `json:"spec,omitempty"`
+	Status GreetStatus `json:"status,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+// GreetList contains a list of Greet
+type GreetList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Greet `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&Greet{}, &GreetList{})
+}
+```
+
+### Image creation of Spring application
+
+   - First, build the jar artifact for the SpringBoot application, using `maven clean install`.
+   - With the Dockerfile defined we can use Docker CLI to build image using `docker build` and `docker push` to push the image to Dockerhub.
+
+### Approaches to deploy the Spring application image to Kubernetes
+
+#### Using individual resource manifests files
+1. The conventional way of deploying the app is to create different resource manifest YAML either in single file or different file. In this case we have to create three manifests for ConfigMap, Service and Deployment resources.
+
+#### Using operator framework
+2. With the Operator SDK project we need to define the CRD in here we have used GoLang and build the reconciler logic.
+- Using the utilities provided in Operator SDK, we generate the CRD files and Controller image. 
+- Once we developed the controller logic, in order to deploy the Spring application we need to deploy the controller image as deployment, then the CRD manifest and the Custom Resource (CR) to the cluster. This CR includes the image of the Spring application.
+
+Note:- 
+  - During development the `api/v1alpha1/*types.go` file will be updated with custom Go struct datatypes, whenever we update this file we need to execute `make generate manifests` command in WSL2 terminal to generate the CRDs YAML file.
+
+### Code 
+  
+#### SpringBoot application entry point
 
 ```java
 package com.app.app;
@@ -67,7 +242,8 @@ public class AppApplication {
 }
 ```
 
-- Simple configuration class, to read the application.yaml when application context is loaded by Spring
+#### Spring Configuration class
+- Configuration class to read the application.yaml when application context is loaded
 
 ```java
 package com.app.app;
@@ -84,7 +260,8 @@ public class GreetConfiguration {
 }
 ```
 
-- pom.xml
+#### Dependencies
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -149,9 +326,11 @@ public class GreetConfiguration {
 </project>
 ```
 
-- Leave the application.properties file empty when building the jar.
+Note:- 
+- Leave the `application.properties` file empty when building the jar.
 
-- Dockerfile 
+#### Dockerfile 
+
 ```Dockerfile
 FROM eclipse-temurin:17-jdk-alpine
 ARG JAR_FILE
@@ -159,23 +338,27 @@ COPY ${JAR_FILE} app.jar
 ENTRYPOINT ["java","-jar","/app.jar"]
 ```
 
-- To create the jar file,  issuing `mvn clean install`. The jar file will be created in `target\` folder.
+### Image creation
 
-- Once the Jar file is generated, to build the docker image we can issue below command.
+- Create the jar file using`mvn clean install`. The jar file will be created in `target\` folder.
+
+- Once the Jar file is generated, use below command to build the docker image.
 
 ```
 docker build --build-arg JAR_FILE=target/*.jar -t local/app .
 ```
 
-- Once the image is build, to run the SpringBoot application in Docker Desktop, use the below  command.
-     - The `env.name` value is passed as docker environment variable `ENV_NAME`.
-     - After the container is ready, the endpoint `http://localhost:8080/api/hello?name=test` should return response
+- We can run the Spring application image in Docker Desktop wiht below command.
 
 ```
 docker run --name app -e ENV_NAME="docker-env" -p 8080:8080 -d local/app:latest
 ```
 
-- The output of the application when hitting the endpoint
+Note:-
+     - The `env.name` value is passed as docker environment variable `ENV_NAME`.
+     - After the container is ready, the endpoint `http://localhost:8080/api/hello?name=test` should return response
+
+#### Output when running the application in Docker Desktop
 
 ```
 $ curl -i http://localhost:8080/api/hello?name=test
@@ -185,14 +368,12 @@ Transfer-Encoding: chunked
 Date: Tue, 15 Aug 2023 03:36:14 GMT                             
                                                                 
 {"content":"Hello test!","source":"FROM-SPRING-CODE-docker-env"}
-
 ```
 
-- With below docker command, additional environment variable GREETING_SOURCE is passed with value, the output section is how the response looks like.
+- Passing GREETING_SOURCE environment variable in Docker run command the output looks like below.
 
 ```
 docker run --name app -e ENV_NAME="docker-env" -e GREETING_SOURCE="from-docker-cli" -p 8080:8080 -d local/app:latest
-
 ```
 
 - Output
@@ -207,19 +388,22 @@ Date: Tue, 15 Aug 2023 03:40:40 GMT
 {"content":"Hello test!","source":"FROM-DOCKER-CLI-docker-env"}
 ```
 
-- To push the the images to the Dockerhub, use below command, the repository name would be the name 
+#### Push image to Dockerhub
+
+- The images can pushed to the Dockerhub with below command. Use appropriate repository name.
 
 ```
 docker build --build-arg JAR_FILE=target/*.jar -t <repoistory-name>/app:v1 .
 ```
 
-## Once the image is available, below is just the deployment manifest that can be deployed to Kubernetes
+### Deployment manifest without CRD or Operator SDK
+
+- Once the image is pushed to Dockerhub or private registry, we can deploy the Spring application and the Deployment manifest looks like below. Assuming the ConfigMap is created as `app-cfg` 
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
   labels:
     name: first-app
   name: app-deploy
@@ -231,7 +415,6 @@ spec:
       name: first-app
   template:
     metadata:
-      creationTimestamp: null
       labels:
         name: first-app
     spec:
@@ -242,7 +425,6 @@ spec:
         ports:
         - containerPort: 80
           name: app-port
-        resources: {}
         volumeMounts:
         - mountPath: /opt/app
           name: app-mount-vol
@@ -252,27 +434,12 @@ spec:
         name: app-mount-vol
 ```
 
-## Operator-sdk framework with the custom resource definition changes
+### CRDs and controller logic in Operator SDK
 
-- Below is the  `*types.go` file, most of the datatype is go struct. The service struct includes, a `corev1.ServiceSpec`.
+- The  fragment of code from `api/v1alpha1/*types.go` file where we define custom Go struct data types, which will generate the CRDs accordingly.
+- The Service struct uses the k8s.io/api/core  `corev1.ServiceSpec` so we can use `port`, `targetPort` properties like in regular Service manifest file. This is an example to demonstrate that it is always not necessary to define all the properties we can reuse the k8s.io core library object as well.
 
 ```go
-package v1alpha1
-
-import (
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-// GreetSpec defines the desired state of Greet
-type GreetSpec struct {
-
-	//Name of the resource
-	// +kubebuilder:validation:MaxLength=25
-	// +kubebuilder:validation:MinLength=1
-	Name       string     `json:"name"`
-	Deployment Deployment `json:"deployment"`
-}
 
 type Deployment struct {
 	Name      string  `json:"name"`
@@ -282,63 +449,16 @@ type Deployment struct {
 	Service   Service `json:"service,omitempty"`
 }
 
-type Config struct {
-	Name     string `json:"name,omitempty"`
-	FileName string `json:"fileName,omitempty"`
-	Data     string `json:"data,omitempty"`
-}
-
-type PodInfo struct {
-	Image           string   `json:"image"`
-	ImagePullPolicy string   `json:"imagePullPolicy,omitempty"`
-	MountName       string   `json:"mountName,omitempty"`
-	MountPath       string   `json:"mountPath,omitempty"`
-	PodPort         int32    `json:"podPort,omitempty"`
-	Command         []string `json:"command,omitempty"`
-	Args            []string `json:"args,omitempty"`
-}
-
 type Service struct {
 	Name string             `json:"name,omitempty"`
 	Spec corev1.ServiceSpec `json:"spec,omitempty"`
 }
-
-// GreetStatus defines the observed state of Greet
-type GreetStatus struct {
-	Status string `json:"status,omitempty"`
-}
-
-//Don't leave any space between the marker
-
-//+kubebuilder:object:root=true
-//+kubebuilder:printcolumn:name="APPNAME",type="string",JSONPath=".spec.name",description="Name of the app"
-//+kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.status",description="Status of the app"
-//+kubebuilder:subresource:status
-// +operator-sdk:gen-csv:customresourcedefinitions.displayName="Greet App"
-// +operator-sdk:gen-csv:customresourcedefinitions.resources="Deployment,v1,\"A Kubernetes Deployment of greet app\""
-
-type Greet struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec   GreetSpec   `json:"spec,omitempty"`
-	Status GreetStatus `json:"status,omitempty"`
-}
-
-//+kubebuilder:object:root=true
-
-// GreetList contains a list of Greet
-type GreetList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Greet `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&Greet{}, &GreetList{})
-}
 ```
 
-- Below is the controller code, where `Reconcile()` calls the function to create the Service, ConfigMap and Deployment.
+#### Reconciler logic
+
+- The `Reconcile()` method calls three different function which creates the Service, ConfigMap and Deployment resource.
+- When the CR is applied, the create event will be triggered and the resources will be deployed. If the CR is deployed with any updates, the update event will update the resources. 
 
 ```go
 package controllers
@@ -602,7 +722,7 @@ func checkAndCreateDeploymentResource(r *GreetReconciler, instance *greetv1alpha
 		},
 	}
 
-	// Used to deserializer
+	// Used to deserialize
 	deployUnstructured, err := runtime.DefaultUnstructuredConverter.ToUnstructured(deployer)
 
 	if err != nil {
@@ -643,566 +763,50 @@ func checkAndCreateDeploymentResource(r *GreetReconciler, instance *greetv1alpha
 }
 ```
 
-- The Custom Resource looks like below, where the service, configmap and deployment is defined in CR.
+- The Custom Resource file content is show above.
 
-```yaml
-apiVersion: greet.greetapp.com/v1alpha1
-kind: Greet
-metadata:
-  labels:
-    app.kubernetes.io/name: greet
-    app.kubernetes.io/instance: greet-sample
-    app.kubernetes.io/part-of: app-op
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: app-op
-  name: greet-sample
-spec:
-  # TODO(user): Add fields here
-  name: first-app
-  deployment:
-    name: app
-    replicas: 1
-    pod:
-      image: thirumurthi/app:v1
-      imagePullPolicy: Always
-      mountName: app-mount
-      mountPath: /opt/app
-      podPort: 8080
-        #command: ["java","-jar","app.jar","--spring.config.location=file://opt/app/application.yaml"]
-      command: ["java"]
-      args: ["-jar","app.jar","--spring.config.location=file:/opt/app/application.yaml"]
-    config: 
-      name: app
-      fileName: application.yaml
-      data: |
-        env.name: Kubernetes-k8s-000
-    service:
-      name: app
-      spec:
-        selector:
-          name: first-app
-        ports:
-        - name: svc-port
-          protocol: TCP
-          port: 80
-          targetPort: 8080
-```
+- The CRD file can be found from [Github](https://github.com/thirumurthis/projects/blob/main/go-operator/app-op/config/crd/bases/greet.greetapp.com_greets.yaml)
 
-- During local development, from the operator-sdk project, form WSL2 issue  `make generate manifests install run` to deploy the controller to KinD cluster. The command will display the logs and once we deploy the sample Custom Resource (like in below code snippet). The log should display the message logged in the Reconcilde code. Below snapshot where the deployment info is printed in console.
+#### Deployment tips
+
+- During local development to run the operator in KinD we can use `make generate manifests install run` command. 
+- Upon deploying the Custom Resource the logs will be displayed like in below snapshot. 
   
 ![image](https://github.com/thirumurthis/projects/assets/6425536/d296ea1a-e8e8-48ff-9684-5bfc721f2e2f)
 
-- Sample Custom Resource manifests, save this content in a file and issue `kubectl apply -f <file-name-with-content>.yaml` to deploy the resources.
+- To deploy the Custom Resource manifests use save the content to a file and use the `kubectl apply -f <file-name-with-content>.yaml` command.
+
 - In below the deployment has pod, config, service sections. The reconcile code will use these values to deploy them in Kuberented cluster.
 
+- Note the config in the Custom Resource (CR) file
+
 ```yaml
-apiVersion: greet.greetapp.com/v1alpha1
-kind: Greet
-metadata:
-  labels:
-    app.kubernetes.io/name: greet
-    app.kubernetes.io/instance: greet-sample
-    app.kubernetes.io/part-of: app-op
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: app-op
-  name: greet-sample
-spec:
-  # TODO(user): Add fields here
-  name: first-app
-  deployment:
-    name: app
-    replicas: 1
-    pod:
-      image: thirumurthi/app:v1
-      imagePullPolicy: Always
-      mountName: app-mount
-      mountPath: /opt/app
-      podPort: 8080
-      command: ["java"]
-      args: ["-jar","app.jar","--spring.config.location=file:/opt/app/application.yaml"]
     config: 
       name: app
       fileName: application.yaml
       data: |
         env.name: k8s-kind-dev-env
         greeting.source: from-k8s-configMap
-    service:
-      name: app
-      spec:
-        selector:
-          name: first-app
-        ports:
-        - name: svc-port
-          protocol: TCP
-          port: 80
-          targetPort: 8080
+````
 
-```
+- Once application is deployed, with nginx container we can hit the endpoint and validate the response, which will look like in below snapshot
 
-- Once application is up, with the nginx pod we can hit the endpoint and the repsonce will look like in below snapshot
 ![image](https://github.com/thirumurthis/projects/assets/6425536/c0658ac8-04b2-46b2-be79-d334b35cb03a)
 
-- The CRD generated in the operator project looks like below
+### Creating controller image
 
-```yaml
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.11.1
-  creationTimestamp: null
-  name: greets.greet.greetapp.com
-spec:
-  group: greet.greetapp.com
-  names:
-    kind: Greet
-    listKind: GreetList
-    plural: greets
-    singular: greet
-  scope: Namespaced
-  versions:
-  - additionalPrinterColumns:
-    - description: Name of the app
-      jsonPath: .spec.name
-      name: APPNAME
-      type: string
-    - description: Status of the app
-      jsonPath: .status.status
-      name: STATUS
-      type: string
-    name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: GreetSpec defines the desired state of Greet
-            properties:
-              deployment:
-                properties:
-                  config:
-                    properties:
-                      data:
-                        type: string
-                      fileName:
-                        type: string
-                      name:
-                        type: string
-                    type: object
-                  name:
-                    type: string
-                  pod:
-                    properties:
-                      args:
-                        items:
-                          type: string
-                        type: array
-                      command:
-                        items:
-                          type: string
-                        type: array
-                      image:
-                        type: string
-                      imagePullPolicy:
-                        type: string
-                      mountName:
-                        type: string
-                      mountPath:
-                        type: string
-                      podPort:
-                        format: int32
-                        type: integer
-                    required:
-                    - image
-                    type: object
-                  replicas:
-                    format: int32
-                    type: integer
-                  service:
-                    properties:
-                      name:
-                        type: string
-                      spec:
-                        description: ServiceSpec describes the attributes that a user
-                          creates on a service.
-                        properties:
-                          allocateLoadBalancerNodePorts:
-                            description: allocateLoadBalancerNodePorts defines if
-                              NodePorts will be automatically allocated for services
-                              with type LoadBalancer.  Default is "true". It may be
-                              set to "false" if the cluster load-balancer does not
-                              rely on NodePorts.  If the caller requests specific
-                              NodePorts (by specifying a value), those requests will
-                              be respected, regardless of this field. This field may
-                              only be set for services with type LoadBalancer and
-                              will be cleared if the type is changed to any other
-                              type.
-                            type: boolean
-                          clusterIP:
-                            description: 'clusterIP is the IP address of the service
-                              and is usually assigned randomly. If an address is specified
-                              manually, is in-range (as per system configuration),
-                              and is not in use, it will be allocated to the service;
-                              otherwise creation of the service will fail. This field
-                              may not be changed through updates unless the type field
-                              is also being changed to ExternalName (which requires
-                              this field to be blank) or the type field is being changed
-                              from ExternalName (in which case this field may optionally
-                              be specified, as describe above).  Valid values are
-                              "None", empty string (""), or a valid IP address. Setting
-                              this to "None" makes a "headless service" (no virtual
-                              IP), which is useful when direct endpoint connections
-                              are preferred and proxying is not required.  Only applies
-                              to types ClusterIP, NodePort, and LoadBalancer. If this
-                              field is specified when creating a Service of type ExternalName,
-                              creation will fail. This field will be wiped when updating
-                              a Service to type ExternalName. More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies'
-                            type: string
-                          clusterIPs:
-                            description: "ClusterIPs is a list of IP addresses assigned
-                              to this service, and are usually assigned randomly.
-                              \ If an address is specified manually, is in-range (as
-                              per system configuration), and is not in use, it will
-                              be allocated to the service; otherwise creation of the
-                              service will fail. This field may not be changed through
-                              updates unless the type field is also being changed
-                              to ExternalName (which requires this field to be empty)
-                              or the type field is being changed from ExternalName
-                              (in which case this field may optionally be specified,
-                              as describe above).  Valid values are \"None\", empty
-                              string (\"\"), or a valid IP address.  Setting this
-                              to \"None\" makes a \"headless service\" (no virtual
-                              IP), which is useful when direct endpoint connections
-                              are preferred and proxying is not required.  Only applies
-                              to types ClusterIP, NodePort, and LoadBalancer. If this
-                              field is specified when creating a Service of type ExternalName,
-                              creation will fail. This field will be wiped when updating
-                              a Service to type ExternalName.  If this field is not
-                              specified, it will be initialized from the clusterIP
-                              field.  If this field is specified, clients must ensure
-                              that clusterIPs[0] and clusterIP have the same value.
-                              \n This field may hold a maximum of two entries (dual-stack
-                              IPs, in either order). These IPs must correspond to
-                              the values of the ipFamilies field. Both clusterIPs
-                              and ipFamilies are governed by the ipFamilyPolicy field.
-                              More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies"
-                            items:
-                              type: string
-                            type: array
-                            x-kubernetes-list-type: atomic
-                          externalIPs:
-                            description: externalIPs is a list of IP addresses for
-                              which nodes in the cluster will also accept traffic
-                              for this service.  These IPs are not managed by Kubernetes.  The
-                              user is responsible for ensuring that traffic arrives
-                              at a node with this IP.  A common example is external
-                              load-balancers that are not part of the Kubernetes system.
-                            items:
-                              type: string
-                            type: array
-                          externalName:
-                            description: externalName is the external reference that
-                              discovery mechanisms will return as an alias for this
-                              service (e.g. a DNS CNAME record). No proxying will
-                              be involved.  Must be a lowercase RFC-1123 hostname
-                              (https://tools.ietf.org/html/rfc1123) and requires `type`
-                              to be "ExternalName".
-                            type: string
-                          externalTrafficPolicy:
-                            description: externalTrafficPolicy describes how nodes
-                              distribute service traffic they receive on one of the
-                              Service's "externally-facing" addresses (NodePorts,
-                              ExternalIPs, and LoadBalancer IPs). If set to "Local",
-                              the proxy will configure the service in a way that assumes
-                              that external load balancers will take care of balancing
-                              the service traffic between nodes, and so each node
-                              will deliver traffic only to the node-local endpoints
-                              of the service, without masquerading the client source
-                              IP. (Traffic mistakenly sent to a node with no endpoints
-                              will be dropped.) The default value, "Cluster", uses
-                              the standard behavior of routing to all endpoints evenly
-                              (possibly modified by topology and other features).
-                              Note that traffic sent to an External IP or LoadBalancer
-                              IP from within the cluster will always get "Cluster"
-                              semantics, but clients sending to a NodePort from within
-                              the cluster may need to take traffic policy into account
-                              when picking a node.
-                            type: string
-                          healthCheckNodePort:
-                            description: healthCheckNodePort specifies the healthcheck
-                              nodePort for the service. This only applies when type
-                              is set to LoadBalancer and externalTrafficPolicy is
-                              set to Local. If a value is specified, is in-range,
-                              and is not in use, it will be used.  If not specified,
-                              a value will be automatically allocated.  External systems
-                              (e.g. load-balancers) can use this port to determine
-                              if a given node holds endpoints for this service or
-                              not.  If this field is specified when creating a Service
-                              which does not need it, creation will fail. This field
-                              will be wiped when updating a Service to no longer need
-                              it (e.g. changing type). This field cannot be updated
-                              once set.
-                            format: int32
-                            type: integer
-                          internalTrafficPolicy:
-                            description: InternalTrafficPolicy describes how nodes
-                              distribute service traffic they receive on the ClusterIP.
-                              If set to "Local", the proxy will assume that pods only
-                              want to talk to endpoints of the service on the same
-                              node as the pod, dropping the traffic if there are no
-                              local endpoints. The default value, "Cluster", uses
-                              the standard behavior of routing to all endpoints evenly
-                              (possibly modified by topology and other features).
-                            type: string
-                          ipFamilies:
-                            description: "IPFamilies is a list of IP families (e.g.
-                              IPv4, IPv6) assigned to this service. This field is
-                              usually assigned automatically based on cluster configuration
-                              and the ipFamilyPolicy field. If this field is specified
-                              manually, the requested family is available in the cluster,
-                              and ipFamilyPolicy allows it, it will be used; otherwise
-                              creation of the service will fail. This field is conditionally
-                              mutable: it allows for adding or removing a secondary
-                              IP family, but it does not allow changing the primary
-                              IP family of the Service. Valid values are \"IPv4\"
-                              and \"IPv6\".  This field only applies to Services of
-                              types ClusterIP, NodePort, and LoadBalancer, and does
-                              apply to \"headless\" services. This field will be wiped
-                              when updating a Service to type ExternalName. \n This
-                              field may hold a maximum of two entries (dual-stack
-                              families, in either order).  These families must correspond
-                              to the values of the clusterIPs field, if specified.
-                              Both clusterIPs and ipFamilies are governed by the ipFamilyPolicy
-                              field."
-                            items:
-                              description: IPFamily represents the IP Family (IPv4
-                                or IPv6). This type is used to express the family
-                                of an IP expressed by a type (e.g. service.spec.ipFamilies).
-                              type: string
-                            type: array
-                            x-kubernetes-list-type: atomic
-                          ipFamilyPolicy:
-                            description: IPFamilyPolicy represents the dual-stack-ness
-                              requested or required by this Service. If there is no
-                              value provided, then this field will be set to SingleStack.
-                              Services can be "SingleStack" (a single IP family),
-                              "PreferDualStack" (two IP families on dual-stack configured
-                              clusters or a single IP family on single-stack clusters),
-                              or "RequireDualStack" (two IP families on dual-stack
-                              configured clusters, otherwise fail). The ipFamilies
-                              and clusterIPs fields depend on the value of this field.
-                              This field will be wiped when updating a service to
-                              type ExternalName.
-                            type: string
-                          loadBalancerClass:
-                            description: loadBalancerClass is the class of the load
-                              balancer implementation this Service belongs to. If
-                              specified, the value of this field must be a label-style
-                              identifier, with an optional prefix, e.g. "internal-vip"
-                              or "example.com/internal-vip". Unprefixed names are
-                              reserved for end-users. This field can only be set when
-                              the Service type is 'LoadBalancer'. If not set, the
-                              default load balancer implementation is used, today
-                              this is typically done through the cloud provider integration,
-                              but should apply for any default implementation. If
-                              set, it is assumed that a load balancer implementation
-                              is watching for Services with a matching class. Any
-                              default load balancer implementation (e.g. cloud providers)
-                              should ignore Services that set this field. This field
-                              can only be set when creating or updating a Service
-                              to type 'LoadBalancer'. Once set, it can not be changed.
-                              This field will be wiped when a service is updated to
-                              a non 'LoadBalancer' type.
-                            type: string
-                          loadBalancerIP:
-                            description: 'Only applies to Service Type: LoadBalancer.
-                              This feature depends on whether the underlying cloud-provider
-                              supports specifying the loadBalancerIP when a load balancer
-                              is created. This field will be ignored if the cloud-provider
-                              does not support the feature. Deprecated: This field
-                              was under-specified and its meaning varies across implementations,
-                              and it cannot support dual-stack. As of Kubernetes v1.24,
-                              users are encouraged to use implementation-specific
-                              annotations when available. This field may be removed
-                              in a future API version.'
-                            type: string
-                          loadBalancerSourceRanges:
-                            description: 'If specified and supported by the platform,
-                              this will restrict traffic through the cloud-provider
-                              load-balancer will be restricted to the specified client
-                              IPs. This field will be ignored if the cloud-provider
-                              does not support the feature." More info: https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/'
-                            items:
-                              type: string
-                            type: array
-                          ports:
-                            description: 'The list of ports that are exposed by this
-                              service. More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies'
-                            items:
-                              description: ServicePort contains information on service's
-                                port.
-                              properties:
-                                appProtocol:
-                                  description: The application protocol for this port.
-                                    This field follows standard Kubernetes label syntax.
-                                    Un-prefixed names are reserved for IANA standard
-                                    service names (as per RFC-6335 and https://www.iana.org/assignments/service-names).
-                                    Non-standard protocols should use prefixed names
-                                    such as mycompany.com/my-custom-protocol.
-                                  type: string
-                                name:
-                                  description: The name of this port within the service.
-                                    This must be a DNS_LABEL. All ports within a ServiceSpec
-                                    must have unique names. When considering the endpoints
-                                    for a Service, this must match the 'name' field
-                                    in the EndpointPort. Optional if only one ServicePort
-                                    is defined on this service.
-                                  type: string
-                                nodePort:
-                                  description: 'Service to no longer need it (e.g. changing type
-                                    from NodePort to ClusterIP). More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport'
-                                  format: int32
-                                  type: integer
-                                port:
-                                  description: The port that will be exposed by this
-                                    service.
-                                  format: int32
-                                  type: integer
-                                protocol:
-                                  default: TCP
-                                  description: The IP protocol for this port. Supports
-                                    "TCP", "UDP", and "SCTP". Default is TCP.
-                                  type: string
-                                targetPort:
-                                  anyOf:
-                                  - type: integer
-                                  - type: string
-                                  description: 'Number or name of the port to access
-                                    on the pods targeted by the service. Number must
-                                    be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
-                                    If this is a string, it will be looked up as a
-                                    named port in the target Pod''s container ports.
-                                    If this is not specified, the value of the ''port''
-                                    field is used (an identity map). This field is
-                                    ignored for services with clusterIP=None, and
-                                    should be omitted or set equal to the ''port''
-                                    field. More info: https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service'
-                                  x-kubernetes-int-or-string: true
-                              required:
-                              - port
-                              type: object
-                            type: array
-                            x-kubernetes-list-map-keys:
-                            - port
-                            - protocol
-                            x-kubernetes-list-type: map
-                          publishNotReadyAddresses:
-                            description: publishNotReadyAddresses indicates that any
-                              agent which deals with endpoints for this Service should
-                              disregard any indications of ready/not-ready. The primary
-                              use case for setting this field is for a StatefulSet's
-                              Headless Service to propagate SRV DNS records for its
-                              Pods for the purpose of peer discovery. The Kubernetes
-                              controllers that generate Endpoints and EndpointSlice
-                              resources for Services interpret this to mean that all
-                              endpoints are considered "ready" even if the Pods themselves
-                              are not. Agents which consume only Kubernetes generated
-                              endpoints through the Endpoints or EndpointSlice resources
-                              can safely assume this behavior.
-                            type: boolean
-                          selector:
-                            additionalProperties:
-                              type: string
-                            description: 'Route service traffic to pods with label
-                              keys and values matching this selector. If empty or
-                              not present, the service is assumed to have an external
-                              process managing its endpoints, which Kubernetes will
-                              not modify. Only applies to types ClusterIP, NodePort,
-                              and LoadBalancer. Ignored if type is ExternalName. More
-                              info: https://kubernetes.io/docs/concepts/services-networking/service/'
-                            type: object
-                            x-kubernetes-map-type: atomic
-                          sessionAffinity:
-                            description: 'Supports "ClientIP" and "None". Used to
-                              maintain session affinity. Enable client IP based session
-                              affinity. Must be ClientIP or None. Defaults to None.
-                              More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies'
-                            type: string
-                          sessionAffinityConfig:
-                            description: sessionAffinityConfig contains the configurations
-                              of session affinity.
-                            properties:
-                              clientIP:
-                                description: clientIP contains the configurations
-                                  of Client IP based session affinity.
-                                properties:
-                                  timeoutSeconds:
-                                    description: timeoutSeconds specifies the seconds
-                                      of ClientIP type session sticky time. The value
-                                      must be >0 && <=86400(for 1 day) if ServiceAffinity
-                                      == "ClientIP". Default value is 10800(for 3
-                                      hours).
-                                    format: int32
-                                    type: integer
-                                type: object
-                            type: object
-                          type:
-                            description: 'do not apply to ExternalName services. More info: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types'
-                            type: string
-                        type: object
-                    type: object
-                required:
-                - name
-                - pod
-                type: object
-              name:
-                description: Name of the resource
-                maxLength: 25
-                minLength: 1
-                type: string
-            required:
-            - deployment
-            - name
-            type: object
-          status:
-            description: GreetStatus defines the observed state of Greet
-            properties:
-              status:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
-                type: string
-            type: object
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
-```
-
-### Creating an image for the operator or controller changes.
-- With the below command from operator-sdk project the controller image can be created and pushed to Docker.
+- From WSL2 we can use below command to create the controller image and push it to Dockerhub.
 
 ```
  make docker-build docker-push IMG=thirumurthi/app-op:v1
 ```
 
-### To deploy the Controller, CRD and CR from manifest to production like environment.
+### To deploy the Controller, CRD and CR from manifest to test or production like environment, we need to 
+ - Deploy the Controller as deployment 
+ - Deploy the CRD 
+ - Deploy the CR
 
-- Below is the deployment manifest which uses the operator or controller image from dockerhub, we can deploy this to Kuberentes cluster.
-- Following the operator deployment, we can deploy the CRD and the CR. 
+- Below is the deployment manifest to deploy the controller.
 
 ```yaml
 apiVersion: apps/v1
@@ -1226,23 +830,37 @@ spec:
       - image: thirumurthi/app-op:v1
         name: app-controller
 ```
+- To deploy the CRD, use the below command 
 
-- In case if the there are exception deploying the operator or controller, we need to create a ServiceAccount
+```
+kubectl apply -f https://github.com/thirumurthis/projects/blob/main/go-operator/app-op/config/crd/bases/greet.greetapp.com_greets.yaml
+```
 
-The exception message,
+- To deploy the CR, use the below command
+
+```
+kubectl apply -f https://github.com/thirumurthis/projects/blob/main/go-operator/app-op/config/samples/greet_v1alpha1_greet.yaml
+```
+
+- When I tried to deploy the controller as deployment, there was an due to permission and it requires a ServiceAccount to be created. The ServiceAccount can be created in Operator SDK but for simplicity executed the following command manually.
+
+- The exception message that you would notice in case if ServiceAccount is not created.
 
 ```
 E0816 03:51:14.671318       1 reflector.go:148] pkg/mod/k8s.io/client-go@v0.27.4/tools/cache/reflector.go:231: Failed to watch *v1alpha1.Greet: failed to list *v1alpha1.Greet: greets.greet.greetapp.com is forbidden: User "system:serviceaccount:default:default" cannot list resource "greets" in API group "greet.greetapp.com" at the cluster scope
 ```
 
-- We need to create the service account
+- To manually create the ServiceAccount we can use below command
+
 ```
-kubectl create clusterrole deployer --verb=get,list,watch,create,delete,patch,update --resource=deployments.apps
-kubectl create clusterrolebinding deployer-srvacct-default-binding --clusterrole=deployer --serviceaccount=default:default
+kubectl create clusterrole deployr --verb=get,list,watch,create,delete,patch,update --resource=deployments.apps
+kubectl create clusterrolebinding deployr-srvacct-default-binding --clusterrole=deployr --serviceaccount=default:default
 ```
 
+### Output after deploying the Controller, CRD and CR
 
-- The deployed resources looks like below,
+- Once Controller, CRD and CR are deployed the list of resources and the output accessing the deployed spring application looks like below snapshot.
+
 ![image](https://github.com/thirumurthis/projects/assets/6425536/fbe560a4-0cf7-4691-9bff-eecae614298b)
 
 
