@@ -4,7 +4,7 @@ In this article we will be using Operator SDK to create Custom Resource Definiti
 
 With reference to my previous [operator-sdk blog](https://thirumurthi.hashnode.dev/extend-kubernetes-api-with-operator-sdk), we will use the same scaffolded and initialized project structure to create the CRD and reconcile logic. The reconciler logic will programmatically create Kubernetes resources object (using k8s.io/core libraries) like Deployment, ConfigMap, Service and deploy them to the cluster.
 
-Pre-requisites:
+### Pre-requisites
  - Basic understanding of Kubernetes
  - KinD CLI installed and Cluster running
  - WSL2 installed 
@@ -13,7 +13,7 @@ Pre-requisites:
 
 To demonstrate the use of Operator SDK in design and create CRD, update reconcile logic and deployment workflow - created a SpringBoot application that exposes an end point in 8080 port. This end point will render the response by reading the value from configuration file or environment variable.
 
-What are the resources used for deploying Spring application?
+### Resources required to deploy Spring application?
 
 - ConfigMap
         - The application.yaml content is deployed as ConfigMap resource. The deployment manifest should mount the ConfigMap as volume, so Spring application can access it. The mounted configMap is passed as external configuration, using `--spring.config.location` option when starting the Spring application. For more details refer the Kubernetes documentation.
@@ -25,29 +25,34 @@ What are the resources used for deploying Spring application?
 ### Operator pattern key components
 
 - Custom Resource Definition (CRD), Custom Resource (CR) and Controller/Operator are the key components
-- CRD & CR 
+
+#### CRD & CR 
    - Custom Resource Definition (CRD) and Custom Resource (CR) plays a crucial part and should be designed based on requirements.
    - The Kubernetes API can be extended with Custom Resource Definition (CRD), this defines the schema for the Custom Resource (CR).
    - Once the CRD is defined we can create an instance of the Custom Resource.
 
-- Controller
+#### Controller
    - The controller in Operator SDK is responsible for watching for events and reconciling the Custom Resource (CR) to desire state based on logic defined in  reconciliation flow. Without controller just deploying the CRD to cluster doesn't do anything.
 
-### Using Operator SDK
+### Use of Operator SDK
 
 With Operator SDK we can design and define the Customer Resource Definition (CRD) with corresponding reconciler logic. Part of the reconcile logic we can deploy different Kubernetes resources.
 
-#### Design 
+#### Design consideration of CRD and CR
 
-The `spec` section in the Custom Resource (CR) is the design starting point, the properties that are required to deploy the application goes under this section.
+- The `spec` section in the Custom Resource (CR) will be the design starting point at least for beginners, the properties that are required to deploy the application goes under this section. In the Operator SDK project structure this file will be generated under `config/samples/`
 
-In the below Custom Resource (CR) snippet, the `spec` section includes `name` and `deployment` properties. The `deployment` section further includes `name`, `pod`, `config` and `service` section.
+- In Custom Resource (CR) code below the `spec` section includes `name` and `deployment` properties. The name will be arbitrary name can be read and applied in the reconciler logic accordingly.
+
+- The `deployment` section further includes `name`, `pod`, `config` and `service` section.
+
 - The `pod` section includes the properties related to Pod manifest,  like image, container port, etc. This will be read in the reconciler logic in Operator SDK project and a deployment object will be created to be deployed in cluster.
+
 - The `config` section will include the data to create the ConfigMap resource.
+
 - The `service` section include `name` and `spec`. The `spec` section in the `api/v1alpha1/*type.go` uses the k8s.io/core library object, so we can use the regular Service manifest properties like `port`, `targetPort`, etc.
 
-- Below is the Custom Resource (CR) used to deploy the Spring application.
-- By reading further we will see how this file is being deployed.
+- By reading further we will see how to deployed the CR to cluster.
 
 ```yaml
 apiVersion: greet.greetapp.com/v1alpha1
@@ -90,6 +95,8 @@ spec:
           port: 80
           targetPort: 8080
 ```
+
+#### Operator SDK type.go file which holds the actual details
 
 - With reference to the CR above, we can compare it with the Operator SDK generated `api/v1alpha1/*type.go` file content where we can easily follow the pattern.
 
@@ -186,12 +193,14 @@ func init() {
    - First, build the jar artifact for the SpringBoot application, using `maven clean install`.
    - With the Dockerfile defined we can use Docker CLI to build image using `docker build` and `docker push` to push the image to Dockerhub.
 
-### Approaches to deploy the Spring application image to Kubernetes
+### Approaches to deploy the Spring application
 
-#### Using individual resource manifests files
+#### Using individual resource manifests (no Operator SDK)
+
 1. The conventional way of deploying the app is to create different resource manifest YAML either in single file or different file. In this case we have to create three manifests for ConfigMap, Service and Deployment resources.
 
-#### Using operator framework
+#### Using Operator SDK
+
 2. With the Operator SDK project we need to define the CRD in here we have used GoLang and build the reconciler logic.
 - Using the utilities provided in Operator SDK, we generate the CRD files and Controller image. 
 - Once we developed the controller logic, in order to deploy the Spring application we need to deploy the controller image as deployment, then the CRD manifest and the Custom Resource (CR) to the cluster. This CR includes the image of the Spring application.
@@ -199,7 +208,7 @@ func init() {
 Note:- 
   - During development the `api/v1alpha1/*types.go` file will be updated with custom Go struct datatypes, whenever we update this file we need to execute `make generate manifests` command in WSL2 terminal to generate the CRDs YAML file.
 
-### Code 
+### Spring application code 
   
 #### SpringBoot application entry point
 
@@ -243,6 +252,7 @@ public class AppApplication {
 ```
 
 #### Spring Configuration class
+
 - Configuration class to read the application.yaml when application context is loaded
 
 ```java
@@ -338,7 +348,7 @@ COPY ${JAR_FILE} app.jar
 ENTRYPOINT ["java","-jar","/app.jar"]
 ```
 
-### Image creation
+#### Image creation of Spring application
 
 - Create the jar file using`mvn clean install`. The jar file will be created in `target\` folder.
 
@@ -358,7 +368,7 @@ Note:-
      - The `env.name` value is passed as docker environment variable `ENV_NAME`.
      - After the container is ready, the endpoint `http://localhost:8080/api/hello?name=test` should return response
 
-#### Output when running the application in Docker Desktop
+#### Output - Running application in Docker
 
 ```
 $ curl -i http://localhost:8080/api/hello?name=test
@@ -388,7 +398,7 @@ Date: Tue, 15 Aug 2023 03:40:40 GMT
 {"content":"Hello test!","source":"FROM-DOCKER-CLI-docker-env"}
 ```
 
-#### Push image to Dockerhub
+#### Push Spring app image to Dockerhub
 
 - The images can pushed to the Dockerhub with below command. Use appropriate repository name.
 
@@ -396,7 +406,7 @@ Date: Tue, 15 Aug 2023 03:40:40 GMT
 docker build --build-arg JAR_FILE=target/*.jar -t <repoistory-name>/app:v1 .
 ```
 
-### Deployment manifest without CRD or Operator SDK
+### Deploy Spring  app with manifest without Operator SDK
 
 - Once the image is pushed to Dockerhub or private registry, we can deploy the Spring application and the Deployment manifest looks like below. Assuming the ConfigMap is created as `app-cfg` 
 
@@ -434,7 +444,9 @@ spec:
         name: app-mount-vol
 ```
 
-### CRDs and controller logic in Operator SDK
+### Deploy Spring application with Operator SDK
+
+#### CRDs
 
 - The  fragment of code from `api/v1alpha1/*types.go` file where we define custom Go struct data types, which will generate the CRDs accordingly.
 - The Service struct uses the k8s.io/api/core  `corev1.ServiceSpec` so we can use `port`, `targetPort` properties like in regular Service manifest file. This is an example to demonstrate that it is always not necessary to define all the properties we can reuse the k8s.io core library object as well.
@@ -458,6 +470,7 @@ type Service struct {
 #### Reconciler logic
 
 - The `Reconcile()` method calls three different function which creates the Service, ConfigMap and Deployment resource.
+   - Function `checkAndCreateConfigMapResource()`, `checkAndCreateServiceResource`, and `checkAndCreateDeploymentResource()` follows the same logic to create or update only difference is which object is being initialized in each method.
 - When the CR is applied, the create event will be triggered and the resources will be deployed. If the CR is deployed with any updates, the update event will update the resources. 
 
 ```go
@@ -801,10 +814,11 @@ func checkAndCreateDeploymentResource(r *GreetReconciler, instance *greetv1alpha
  make docker-build docker-push IMG=thirumurthi/app-op:v1
 ```
 
-### To deploy the Controller, CRD and CR from manifest to test or production like environment, we need to 
- - Deploy the Controller as deployment 
- - Deploy the CRD 
- - Deploy the CR
+### Deploying Spring app using Controller Image, CRD and CR
+
+- To deploy Spring app in test or production like environment we need to follow below steps
+
+ #### Deploy the Controller in Deployment manifest
 
 - Below is the deployment manifest to deploy the controller.
 
@@ -830,27 +844,27 @@ spec:
       - image: thirumurthi/app-op:v1
         name: app-controller
 ```
-- To deploy the CRD, use the below command 
+
+#### Deploy the CRD 
 
 ```
 kubectl apply -f https://github.com/thirumurthis/projects/blob/main/go-operator/app-op/config/crd/bases/greet.greetapp.com_greets.yaml
 ```
-
-- To deploy the CR, use the below command
+#### Deploy the CR
 
 ```
 kubectl apply -f https://github.com/thirumurthis/projects/blob/main/go-operator/app-op/config/samples/greet_v1alpha1_greet.yaml
 ```
 
-- When I tried to deploy the controller as deployment, there was an due to permission and it requires a ServiceAccount to be created. The ServiceAccount can be created in Operator SDK but for simplicity executed the following command manually.
-
-- The exception message that you would notice in case if ServiceAccount is not created.
+- Note:- 
+     - When I tried to deploy the controller as deployment, there was an due to permission and it requires a ServiceAccount to be created. The ServiceAccount can be created in Operator SDK but for simplicity executed the following command manually.
+     - The exception message that you would notice in case if ServiceAccount is not created.
 
 ```
 E0816 03:51:14.671318       1 reflector.go:148] pkg/mod/k8s.io/client-go@v0.27.4/tools/cache/reflector.go:231: Failed to watch *v1alpha1.Greet: failed to list *v1alpha1.Greet: greets.greet.greetapp.com is forbidden: User "system:serviceaccount:default:default" cannot list resource "greets" in API group "greet.greetapp.com" at the cluster scope
 ```
 
-- To manually create the ServiceAccount we can use below command
+>  To manually create the ServiceAccount we can use below command
 
 ```
 kubectl create clusterrole deployr --verb=get,list,watch,create,delete,patch,update --resource=deployments.apps
