@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: grpc-server
+  datasource:
+    platform: h2
+    data: classpath:schema.sql,classpath:data.sql
+    url: jdbc:h2:file:./data/order;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE;
+    driverClassName: org.h2.Driver
+    username: test
+    password: orderSystem
+    generate-unique-name: false
+  jpa:
+    defer-datasource-initialization: true
+    show-sql: true
+  properties:
+    hibernate:
+      format_sql: true
+  h2:
+    console:
+      enabled: false
+      path: /h2-console
+      settings:
+        trace: true
+        web-allow-others: false
+  sql:
+    init:
+      platform: h2
+      mode: always
+logging:
+  level:
+   org:
+     hibernate:
+      SQL: DEBUG
+      orm:
+        jdbc:
+          bind: DEBUG

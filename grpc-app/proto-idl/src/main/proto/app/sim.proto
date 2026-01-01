@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package app;
+
+option java_package = "com.proto.app";
+option java_multiple_files = true;
+
+import "app/order.proto";
+
+message SimRequest{
+  map<string,string> simulatorRequest = 1;
+}
+
+message SimResponse{
+  string simulatorResponse = 1;
+}

@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: grpc-client
+  #profiles:
+  #  active: orderhandler
+  grpc:
+    client:
+      channels:
+         local: #use this to fetch for default client
+            address: 0.0.0.0:9090
+    server:
+      enabled: false
+
+  jackson:
+    serialization:
+      FAIL_ON_EMPTY_BEANS: false
+
+#"spring.grpc.client.default-channel.address=static://0.0.0.0:9090"
+# client app logs indicate that server started so used below
+#spring.grpc.server.enabled: false
+
+#logging.level.root: info
+logging:
+  level:
+    io:
+      grpc: DEBUG
+
+server:
+  port: 8085
+app:
+  grpc:
+    client:
+      methodConfig:
+        enabled: true
+        name:
+          - service: "com.proto.app.OrderService"
+            method: createOrder
+          - service: "com.proto.app.OrderService"
+            method: updateOrder
+          - service: "com.proto.app.OrderService"
+            method: getOrderStatus
+          - service: "com.proto.app.OrderService"
+            method: specialCaseSimulator
+        retryPolicy:
+          maxAttempts: 5.0
+          initialBackoff: "0.5s"
+          maxBackoff: "30s"
+          backoffMultiplier: 2.0
+          retryableStatusCodes: ["UNAVAILABLE","DEADLINE_EXCEEDED"]
+        negotiationType: PLAINTEXT

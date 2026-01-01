@@ -1,0 +1,188 @@
+package com.spring.grpc.client;
+
+
+import com.proto.app.OrderResponse;
+import com.proto.app.OrderServiceGrpc;
+import com.proto.app.OrderStatus;
+import com.proto.app.OrderStatusCode;
+import com.proto.app.SimRequest;
+import com.proto.app.SimResponse;
+import com.spring.grpc.constant.AppConstants;
+import com.spring.grpc.data.OrderRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/api")
+public class OrderController {
+
+    private static final Logger logger = LoggerFactory.getLogger(OrderController.class);
+
+    private final OrderServiceGrpc.OrderServiceBlockingStub clientBlockingStub;
+    OrderController(OrderServiceGrpc.OrderServiceBlockingStub clientBlockingStub) {
+        this.clientBlockingStub = clientBlockingStub;
+    }
+
+    @PostMapping(path = "/order",
+    consumes = MediaType.APPLICATION_JSON_VALUE,
+    produces = MediaType.APPLICATION_JSON_VALUE)
+    public OrderResponse submitOrder(@RequestBody OrderRequest orderRequest){
+
+        logger.info("order request received...");
+        if(orderRequest.getUserName() == null){
+            OrderResponse response = OrderResponse
+                    .newBuilder()
+                    .build();
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST)
+                    .getBody();
+        }
+        com.proto.app.OrderRequest req = com.proto.app.OrderRequest
+                .newBuilder()
+                .setDescription(orderRequest.getDescription()==null?"":orderRequest.getDescription())
+                .setQuantity(orderRequest.getQuantity())
+                .setItemName(orderRequest.getItemName()==null?"":orderRequest.getItemName())
+                .setStatus(getStatusCode(orderRequest.getOrderStatus()==null?"RECEIVED":orderRequest.getOrderStatus()))
+                .setUserName(orderRequest.getUserName())
+                .setUserType(orderRequest.getUserType()==null?"by_user":orderRequest.getUserType())
+                .build();
+
+       OrderResponse response = clientBlockingStub.createOrder(req);
+
+        return new ResponseEntity<>(response, HttpStatus.CREATED).getBody();
+    }
+
+    @PutMapping("/update")
+    public com.proto.app.OrderStatus updateOrder(@RequestBody OrderRequest orderRequest){
+
+        logger.info("order update request received...");
+        if(orderRequest.getUserName() == null){
+            com.proto.app.OrderStatus response = com.proto.app.OrderStatus
+                    .newBuilder()
+                    .build();
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST)
+                    .getBody();
+        }
+        com.proto.app.OrderRequest req = com.proto.app.OrderRequest
+                .newBuilder()
+                .setDescription(orderRequest.getDescription()==null?"":orderRequest.getDescription())
+                .setQuantity(orderRequest.getQuantity())
+                .setOrderId(orderRequest.getOrderId())
+                .setItemName(orderRequest.getItemName()==null?"":orderRequest.getItemName())
+                .setStatus(getStatusCode(orderRequest.getOrderStatus()==null?"RECEIVED":orderRequest.getOrderStatus()))
+                .setUserName(orderRequest.getUserName())
+                .setUserType(orderRequest.getUserType()==null?"by_user":orderRequest.getUserType())
+                .build();
+
+        com.proto.app.OrderStatus resStatus = clientBlockingStub.updateOrder(req);
+
+        return new ResponseEntity<>(resStatus, HttpStatus.CREATED).getBody();
+    }
+
+    /**
+     * The Optional is used to handle if the requestParameter are not sent
+     */
+    @GetMapping("/status")
+    public ResponseEntity<StreamingResponseBody> getStatuses(
+            @RequestParam(name="userName") Optional<String> userName ,
+            @RequestParam(name="orderId") Optional<Long> orderId){
+
+        com.proto.app.OrderKey orderSearchKey = com.proto.app.OrderKey.newBuilder()
+                .setUserName(userName.orElse(""))
+                .setOrderId(orderId.orElse(0L))
+                .build();
+
+        StreamingResponseBody responseBody = statusResponse -> {
+             Iterator<OrderStatus> statuses = clientBlockingStub.getOrderStatus(orderSearchKey);
+             try {
+                 while(statuses.hasNext()) {
+                     OrderStatus status = statuses.next();
+                     statusResponse.write(status.toString().getBytes(StandardCharsets.UTF_8));
+                     statusResponse.flush();
+                 }
+             }catch (IOException e){
+                 logger.error("Error exception ",e);
+             }
+        };
+        return  ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL,"no-cache")
+                .body(responseBody);
+    }
+
+    @GetMapping("/delay")
+    public ResponseEntity<?> simulateDelay(){
+
+        logger.info("request simulate delay");
+
+        Map<String, String> reqMap = new HashMap<>();
+
+        reqMap.put("simType","networkDelay");
+        reqMap.put("delay","18000L");
+
+        SimRequest req = SimRequest.newBuilder().putAllSimulatorRequest(reqMap)
+                .build();
+
+        SimResponse resp = clientBlockingStub.specialCaseSimulator(req);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .body(resp.getSimulatorResponse());
+    }
+
+    @GetMapping("/simulate")
+    public ResponseEntity<?> simulateServerNetwork(){
+
+        logger.info("simulate server network based retry");
+        Map<String, String> reqMap = new HashMap<>();
+
+        reqMap.put("simType","serverException");
+
+        SimRequest req = SimRequest.newBuilder().putAllSimulatorRequest(reqMap)
+                .build();
+
+        SimResponse resp = SimResponse.newBuilder().setSimulatorResponse("").build();
+        try {
+            resp = clientBlockingStub.specialCaseSimulator(req);
+        } catch(Exception exe){
+            logger.error("Exception throw during api access",exe);
+            return ResponseEntity.internalServerError()
+                    .body(resp);
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .body(resp.getSimulatorResponse());
+    }
+
+    private static com.proto.app.OrderStatusCode getStatusCode(String orderStatus ){
+        return switch (orderStatus){
+            case AppConstants.CREATED -> OrderStatusCode.valueOf(AppConstants.CREATED);
+            case AppConstants.RECEIVED -> OrderStatusCode.valueOf(AppConstants.RECEIVED);
+            case AppConstants.INPROGRESS -> OrderStatusCode.valueOf(AppConstants.INPROGRESS);
+            case AppConstants.DELIVERED -> OrderStatusCode.valueOf(AppConstants.DELIVERED);
+            case AppConstants.COMPLETED -> OrderStatusCode.valueOf(AppConstants.COMPLETED);
+            case AppConstants.CANCELLED -> OrderStatusCode.valueOf(AppConstants.CANCELLED);
+            case AppConstants.DELETED -> OrderStatusCode.valueOf(AppConstants.DELETED);
+            case AppConstants.EDITED -> OrderStatusCode.valueOf(AppConstants.EDITED);
+            default -> OrderStatusCode.valueOf(AppConstants.NOSTATUS);
+        };
+    }
+}
