@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap  # or Secret
+metadata:
+  name: my-config
+  annotations:
+    reloader.stakater.com/ignore: "true"
+data:
+  app: "sample"
+
+
