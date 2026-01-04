@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jbang-spring-app
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: jbang-spring-app
+  template:
+    metadata:
+      labels:
+        app: jbang-spring-app
+    spec:
+      volumes:
+      - name: jbang-app-volume
+        configMap:
+          name: jbang-app-config
+      containers:
+        - name: jbang-spring-app
+          image: jbang-spring-app
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+          - name: jbang-app-volume
+            mountPath: /src/config
+            readOnly: true
+          ports:
+           - containerPort: 8080
+---
+# service
+apiVersion: v1
+kind: Service
+metadata:
+  name: jbang-app-service
+spec:
+  selector:
+    app: jbang-spring-app
+  ports:
+    - protocol: TCP
+      port: 8086
+      targetPort: 8080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jbang-app-config
+  annotations:
+    reloader.stakater.com/auto: "true"
+    #reloader.stakater.com/rollout-strategy: "restart"
+data:
+  application.yaml: |
+    app:
+      message: "message-from-k8s-configmap"
+---
