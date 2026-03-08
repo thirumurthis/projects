@@ -22,8 +22,10 @@ We use Go lang containerregistry library crane to push the image to private regi
 
 - The code uses flag lib to pass CLI argument, the image archive tar.gz is passed to the code.
 - The gzip is uncompressed to tar file and it is passed to the tarball library to load the manifest in the tar archive.
+- The input archive image is passed to the code using -image-tar flag
 - The -list flag will print the image info from the tar manifest.
-- The crane library push the image to artifactory, it support multi image archive. 
+- The -target-repo will take the target repo with the host. The local nexus was deployed in `nexus.local/local-docker`
+- The crane library push the image to artifactory, it support multi image archive. In this case we have busybox and nginx image tar.gz file.
 
 ```go
 package main
@@ -379,3 +381,11 @@ time=2026-03-07T22:02:57.866-08:00 level=INFO msg="Successfully published image 
 time=2026-03-07T22:02:57.953-08:00 level=INFO msg="Successfully published image to repo" targetRepoImageUrl=nexus.local/local-docker/busybox:latest
 completed
 ```
+
+Nexus artifactory before executing the code
+
+<img width="1591" height="1010" alt="image" src="https://github.com/user-attachments/assets/54c5e621-03b1-4125-8bbf-2c6aeef4a553" />
+
+After executing the command we could see the images are pushed
+
+<img width="1357" height="1113" alt="image" src="https://github.com/user-attachments/assets/65b0e37a-aacb-4c53-856a-dfb4658c2bee" />
