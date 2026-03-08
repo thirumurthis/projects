@@ -1,5 +1,7 @@
 ### Simple JBang project spring-boot
 
+For more details refer the [link](https://github.com/thirumurthis/Learnings/blob/main/K8s/stakater_reloader/stakater_jbang_spring_app/stakater_reloader.md) 
+
 - Install the stakater
 
 ```
