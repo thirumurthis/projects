@@ -389,3 +389,13 @@ Nexus artifactory before executing the code
 After executing the command we could see the images are pushed
 
 <img width="1357" height="1113" alt="image" src="https://github.com/user-attachments/assets/65b0e37a-aacb-4c53-856a-dfb4658c2bee" />
+
+
+For anonymous access create role
+
+<img width="1903" height="1360" alt="image" src="https://github.com/user-attachments/assets/b8d4750f-17f3-4ec0-a090-dabc9cd75758" />
+
+Provide a Role id name and Role name
+
+<img width="926" height="1452" alt="image" src="https://github.com/user-attachments/assets/970a2754-cf81-4e28-9249-b0017ec0427f" />
+
