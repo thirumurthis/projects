@@ -1,1 +1,3 @@
 go-image-loader/image-loader/input/*
+go-image-loader/image-loader/output/*
+go-image-loader/image-loader/*.exe
