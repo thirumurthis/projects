@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: rag
+  ai:
+    ollama:
+      init:
+        pull-model-strategy: when_missing
+        timeout: 5m
+        embedding:
+          additional-models:
+            - mxbai-embed-large
+            #- nomic-embed-text
+          options:
+            model: mxbai-embed-large
+            keep_alive: 30m
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: llama3.2
+    # https://docs.spring.io/spring-ai/reference/api/embeddings/ollama-embeddings.html
+    model:
+      embedding: ollama
+    #vectorstore:
+    #    pgvector:
+    #       initialize-schema: true
+    vectorstore:
+      qdrant:
+        host: localhost
+        port: 6334
+        use-tls: false
+        initialize-schema: true
+        collection-name: custom-collection
+  datasource:
+    url: jdbc:postgresql://localhost:5432/vdb1
+    username: user
+    password: password
+
+server:
+  port: 8095
