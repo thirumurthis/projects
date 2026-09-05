@@ -10,7 +10,7 @@ The idea here is to perform basic operation (list, create and upload) to access 
 
 The Picocli dependency is used to create command line type interface. arguments can be passed using flags like --endpoint <endpoint-url>. Spring Boot is used for bean management when the Picocli strater dependency is added to classpath the factory bean is automatically injected to the context. The AWS S3 sdk is used to create the client using the provided certificate. This app requires certificate to be provided in the option to access the S3 service.
 
-The Picocli library provides annotation support where the values of the flag can be read from the environment variables as well. The `@option` annotation in `cliOptions.java` could see the default value using `${env:S3_ENDPOINT}`. This helps to set some of the credentials variable to be set in the environment variable.
+The Picocli library provides annotation to create command line flags, with the annotation we can read the environment variable values as well when the cli is executed. Refer the `cliOptions.java` code, `@option` annotation the defaultValue property uses `${env:S3_ENDPOINT}`. This helps to set the credentials value at environment variable level and pass rest via the command line flags, shown below in this article the keys are set in environment variable but endpoints are passed in the flags.
 
 The application.yaml is added to the structure, used to control the logging level details. The code uses System.out to print the info to console when the CLI is executed. 
 
@@ -27,13 +27,10 @@ The folder structure of the Jbang S3 Cli app
         └── s3Object.java
 ```
 
-Below is the command to execute the S3 CLI app code using JBang, the command will look like below. In this case we are not passing any flags so will display the CLI usage like in the below output section. 
+##### Source code 
+The source code for the JBang based S3 App CLI - [s3_jbang_cli/s3cliapp](https://github.com/thirumurthis/projects/edit/main/s3_jbang_cli/s3cliapp/README.md)
 
-```
-jbang s3cliapp\app.java
-```
-
-Output
+Below are the commands, on how to execute the S3 CLI app code using JBang CLI. In this case we are not passing any flags so will display the CLI usage like in the below output section. 
 
 ```
 $ jbang app.java 
@@ -73,6 +70,7 @@ s3cli operations create and list buckets, upload file.
                             use this option to pass secret key, alternatively
                               S3_SECRET_KEY env variable can also be used
 ```
+
 <img width="2044" height="1248" alt="image" src="https://github.com/user-attachments/assets/d4bce3ee-c811-4922-b98e-e976b629f341" />
 
 As mentioned Picocli supports to read variable values from environment, we can set the values to environment. Below is example, where the kubectl command is used to extract the key values from secret from Seaweedfs deployed server and set the value to shell env variable. Below will work in Git Bash, WSL2 and Linux terminals.
@@ -112,5 +110,4 @@ To generate the certificate in PEM format use `openssl` command or the attached 
 Output
 <img width="1434" height="428" alt="image" src="https://github.com/user-attachments/assets/e97472c5-4078-4169-bfdd-68e17fb024ce" />
 
-##### Source code 
-The source code for the JBang based S3 App CLI - [s3_jbang_cli/s3cliapp](https://github.com/thirumurthis/projects/edit/main/s3_jbang_cli/s3cliapp/README.md)
+
