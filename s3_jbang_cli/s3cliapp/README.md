@@ -2,6 +2,7 @@
 
 Pre-requistes
   - S3 compatible store is deployed, for development in my case used KinD deployed with Seaweedfs and to expose the S3 gateway as SSL, cert-manager and Apisix route were used.
+  - Jbang CLI installed
 
 The folder structure of the Jbang S3 Cli app
 
@@ -23,7 +24,7 @@ The picocli options can also read from the environment variables as well.
 For example, execution below command will throw error message like below
 
 ```
-> jbang "s3cliapp\app.java" --operation list --cert ./cert.pem
+> jbang s3cliapp\app.java
 ```
 
 Output
