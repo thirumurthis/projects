@@ -1,8 +1,18 @@
-### Simple CLI built using Jbang to access the S3 compatible service with some basic operations
+### S3 CLI using Jbang to access the S3 service for basic operations
 
-Pre-requistes
-  - S3 compatible store is deployed, for development in my case used KinD deployed with Seaweedfs and to expose the S3 gateway as SSL, cert-manager and Apisix route were used.
-  - Jbang CLI installed
+#### Pre-requistes
+  - Jbang CLI installed. JBang allows to execute Java like script, refer the [JBang](https://www.jbang.dev) documentation for more details.
+  - S3 compatible service accessible or deployed in local. In my case have deployed Seaweedfs in KinD cluster using operators chart, cert-manager and Apisix route used to expose the HTTPS endpoint with self signed certs. For more details to deploy Seaweedfs refer my blog at [Hashnode](https://thirumurthi.hashnode.dev/deploy-s3-compatible-seaweedfs-in-kind-cluster) or [Medium](https://medium.com/@thirumurthi.s/s3-compatible-seaweedfs-service-deployed-in-kind-cluster-50ad382aec6a?sharedUserId=thirumurthi.s).
+
+#### Summary
+
+The idea of this code is to perform basic operation on the S3 using the AWS S3 SDK dependencies. The structure is managed for code maintenance, all the java code can be placed in single file as well. 
+
+The Picocli dependency is used for create command line type interface, where we can pass arguments using flags. Spring Boot is used here since when the Picocli strater dependency is added to class path the factory bean is automatically injected to the context. The AWS S3 sdk is used to create the client using the provided certificate. This CLI requires certificate to be passed.
+
+The Picocli library provides annotation support where the values of the flag can be read from the environment variables as well. The `@option` annotation in `cliOptions.java` could see the default value using `${env:S3_ENDPOINT}`. This helps to set some of the credentials variable to be set in the environment variable.
+
+The application.yaml is added to the structure, used to control the logging level details. The code uses System.out to print the info to console when the CLI is executed. 
 
 The folder structure of the Jbang S3 Cli app
 
@@ -17,14 +27,10 @@ The folder structure of the Jbang S3 Cli app
         └── s3Object.java
 ```
 
-The Spring Boot, Pico Cli and S3 SDK dependencies are used to build this app. PicoCli dependency is used to handle option that can be passed to the java application. 
-
-The picocli options can also read from the environment variables as well.
-
-For example, execution below command will throw error message like below
+Below is the command to execute the S3 CLI app code using JBang, the command will look like below. In this case we are not passing any flags so will display the CLI usage like in the below output section. 
 
 ```
-> jbang s3cliapp\app.java
+jbang s3cliapp\app.java
 ```
 
 Output
@@ -69,18 +75,15 @@ s3cli operations create and list buckets, upload file.
 ```
 <img width="2044" height="1248" alt="image" src="https://github.com/user-attachments/assets/d4bce3ee-c811-4922-b98e-e976b629f341" />
 
-
-Instead of passing the keys in CLI argument these can be set in environment variables. In Gitbash or WSL2 we can use export command to configure environment values to variable for the shell. Sample command like below where the keys are fetched from the seaweedfs secrets.
+As mentioned Picocli supports to read variable values from environment, we can set the values to environment. Below is example, where the kubectl command is used to extract the key values from secret from Seaweedfs deployed server and set the value to shell env variable. Below will work in Git Bash, WSL2 and Linux terminals.
 
 ```
 export S3_ACCESS_KEY=$(kubectl get -n seaweedfs secret admin-s3-secret -o go-template='{{index .data "accessKey" | base64decode}}')
 export S3_SECRET_KEY=$(kubectl get -n seaweedfs secret admin-s3-secret -o go-template='{{index .data "secretKey" | base64decode}}')
 ```
 
+Below shows the command to list the buckets from the S3 service, since the keys are passed via environment variables, the operation will be successfully completed. Refer the output snapshot.
 
-For successful execution see below example
-
-Successful exection Command
 ```
 $ jbang "app.java" --operation list --endpoint https://s3.swfs.com --cert seaweed-s3/cert.pem
 ```
@@ -101,10 +104,13 @@ List of buckets after creation of bucket
 <img width="2408" height="296" alt="image" src="https://github.com/user-attachments/assets/c4de7971-1371-4a30-835a-06e0e73a389f" />
 
 
-To generate the PEM certificate format use the attached script with specific dns, like in below example
+To generate the certificate in PEM format use `openssl` command or the attached script can generate by passing specific dns and port. Which is shown below.
 
 ```
 ./getCertificate.sh --dns s3.swfs.com --port 443
 ```
 Output
 <img width="1434" height="428" alt="image" src="https://github.com/user-attachments/assets/e97472c5-4078-4169-bfdd-68e17fb024ce" />
+
+##### Source code 
+The source code for the JBang based S3 App CLI - [s3_jbang_cli/s3cliapp](https://github.com/thirumurthis/projects/edit/main/s3_jbang_cli/s3cliapp/README.md)
