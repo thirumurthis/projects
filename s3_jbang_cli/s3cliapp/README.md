@@ -1,6 +1,6 @@
 ### S3 CLI using Jbang to access the S3 service for basic operations
 
-#### Pre-requistes
+#### Pre-requisites
   - Jbang CLI installed. JBang allows to execute Java like script, refer the [JBang](https://www.jbang.dev) documentation for more details.
   - S3 compatible service accessible or deployed in local. In my case have deployed Seaweedfs in KinD cluster using operators chart, cert-manager and Apisix route used to expose the HTTPS endpoint with self signed certs. For more details to deploy Seaweedfs refer my blog at [Hashnode](https://thirumurthi.hashnode.dev/deploy-s3-compatible-seaweedfs-in-kind-cluster) or [Medium](https://medium.com/@thirumurthi.s/s3-compatible-seaweedfs-service-deployed-in-kind-cluster-50ad382aec6a?sharedUserId=thirumurthi.s).
 
