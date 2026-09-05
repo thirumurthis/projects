@@ -6,9 +6,9 @@
 
 #### Summary
 
-The idea of this code is to perform basic operation on the S3 using the AWS S3 SDK dependencies. The structure is managed for code maintenance, all the java code can be placed in single file as well. 
+The idea here is to perform basic operation (list, create and upload) to access the S3 service using the AWS S3 SDK dependencies. The below project structure is created for easy code maintenance. With JBang all the java code can be placed in a single file. 
 
-The Picocli dependency is used for create command line type interface, where we can pass arguments using flags. Spring Boot is used here since when the Picocli strater dependency is added to class path the factory bean is automatically injected to the context. The AWS S3 sdk is used to create the client using the provided certificate. This CLI requires certificate to be passed.
+The Picocli dependency is used to create command line type interface. arguments can be passed using flags like --endpoint <endpoint-url>. Spring Boot is used for bean management when the Picocli strater dependency is added to classpath the factory bean is automatically injected to the context. The AWS S3 sdk is used to create the client using the provided certificate. This app requires certificate to be provided in the option to access the S3 service.
 
 The Picocli library provides annotation support where the values of the flag can be read from the environment variables as well. The `@option` annotation in `cliOptions.java` could see the default value using `${env:S3_ENDPOINT}`. This helps to set some of the credentials variable to be set in the environment variable.
 
