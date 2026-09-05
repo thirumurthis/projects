@@ -29,28 +29,44 @@ For example, execution below command will throw error message like below
 Output
 
 ```
-Missing required options: '--endpoint=<endpointUrl>', '--access-key=<accessKey>', '--secret-key=<secretKey>'
+$ jbang app.java 
+[jbang] Building jar for app.java...
+Missing required options: '--endpoint=<endpointUrl>', '--access-key=<accessKey>', '--secret-key=<secretKey>', '--operation=<operation>'
 Usage: s3cli [-h] --access-key=<accessKey> [--bucket=<bucketName>]
              [--cert=<certPath>] [--content-type=<contentType>]
              --endpoint=<endpointUrl> [--file=<file>] --operation=<operation>
              [--region=<s3region>] --secret-key=<secretKey>
 s3cli operations create and list buckets, upload file.
       --access-key=<accessKey>
-
-      --bucket=<bucketName> bucket name
-      --cert=<certPath>     certificate path of the S3
+                            use this option to pass access key, alternatively
+                              S3_ACCESS_KEY env variable can also be used
+      --bucket=<bucketName> use this option to pass bucket name, alternatively
+                              S3_BUCKET env variable can also be used
+      --cert=<certPath>     use this option to pass certificate path of the S3,
+                              alternatively S3_CERT_PATH env variable can also
+                              be used
       --content-type=<contentType>
-                            file to upload when using upload operation
+                            optinoal flag to pass content type of the file used
+                              for upload operation, for standard file like pdf,
+                              txt, etc. appropriate content type will be set ,
+                              alternatively use env var S3_CONTENT_TYPE
       --endpoint=<endpointUrl>
-
-      --file=<file>         file to upload when using upload operation
-  -h, --help                display help message
+                            use this option to pass endpotint url,
+                              alternatively S3_ENDPOINT env variable can also
+                              be used
+      --file=<file>         pass the single file to be uploaded to the bucket
+                              only used for upload operation, alternatively
+                              INPUT_FILE env variable can also be used
+  -h, --help                display command usage info
       --operation=<operation>
-                            operation list|create|upload
-      --region=<s3region>
+                            supported operation options are list|create|upload
+      --region=<s3region>   S3 region, defaults to us-west-1, alternatively
+                              S3_REGION env variable can also be used
       --secret-key=<secretKey>
+                            use this option to pass secret key, alternatively
+                              S3_SECRET_KEY env variable can also be used
 ```
-<img width="1590" height="770" alt="image" src="https://github.com/user-attachments/assets/14d0f66e-c6b0-4109-b7b8-e6aa85f0dc18" />
+<img width="2044" height="1248" alt="image" src="https://github.com/user-attachments/assets/d4bce3ee-c811-4922-b98e-e976b629f341" />
 
 
 Instead of passing the keys in CLI argument these can be set in environment variables. In Gitbash or WSL2 we can use export command to configure environment values to variable for the shell. Sample command like below where the keys are fetched from the seaweedfs secrets.
