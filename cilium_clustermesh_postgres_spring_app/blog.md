@@ -1,11 +1,12 @@
 ## Multi-cluster Cilium Clustermesh Demonstrating Active-Standby Database and Active-Active Application
 
-This article details on creating two Kubernetes cluster using KinD and configuring both with Cilium clustermesh, the primary goal is to demonstrate how to configure Postgres DB in synchronized streaming replication between cluster. Thus database would be in Active-Standby mode. Also, a Spring Boot application deployed to connect to the primary database instance, thus the application would be in Active-Active mode.
+This article shows the steps to setup two Kubernetes cluster using KinD CLI and configuring the clustermesh  with Cilium. The primary goal is to demonstrate how to configure Postgres Database in synchronized streaming replication mode between cluster. This requires the Postgres database should be discoverable between cluster, so it gets configured Active-Standby mode. To demonstrate the switch over, a simple Spring Boot application is created and deployed which exposes API to insert data and configured to always connect to the primary database instance at any point of time. Since the Spring Boot application deployed on both the cluster and configured to connect to the primary database this would be in Active-Active mode that means accessing the API from each cluster will render the same data.
 
-The spring application identifies the primary database instance using the Cilium service discovery between the clusters. To start with the cluster 0 will be Active and the cluster 1 will be in Standby mode. When database is switched over the current Standby to Active and the current Standby to Active, we could observe the Spring Boot application automatically connects to the primary instance at all time. This is achived with the Hikari pool connection configuration `targetServerType=primary` in the database connection string itself.
+The spring application uses Hikari pool which is configured to target the primary database instance (using `targetServerType=primary` in db url connection string). The Cilium clustermesh enables the service discovery accross clusters so the database can be access using the service name, when the Kuberentes service deployed on each cluster has the same name with specific annotations. These annotations are configued in the Postgres database configuration itself so during installation it will get added automatically. 
 
-Recently had to develop similar architecture at work with totally different approach. But in here documented some of the setup using KinD cluster locally so it can be used for learing and development purposes.
+The Postgres database configuration in this article will deploy the cluster 0 as Active and the cluster 1 as Standby. The standby configuration can be identified from the configuration which should include the standby host and port to communicate with each clusters. Like in disastor recovery, we can switched over the database by prompting the Standby to Active and the Active to Standby. The switch over doesn't cause any disurption in the Spring Boot application itself for a moment during switch over we could see the database connection switch over to primary instance in the logs of the application.
 
+Recently had to opportunity to work on similar architecture with totally different components. This article is to document some of the learnings, the setup is done using KinD cluster locally so it will be helpful for learing and development purposes.
 
 ### Prerequisites
 
@@ -18,49 +19,50 @@ Recently had to develop similar architecture at work with totally different appr
 
 ### Summary
 
-Summary of steps to deploy the multi-cluster environment using KinD with cilium cluster mesh and configure Postgres DB with Zalando operator in Active-Standby. Create a simple application in Active-Active mode and connects to the primary instance of database. The manfiest configurations are available in [Github repository](https://github.com/thirumurthis/projects/tree/main/cilium_clustermesh_postgres_spring_app).
+Summary of deploy the multi-cluster environment using KinD and configure them in clustermesh with Cilium. Once the clustermesh is enabled we can validate the service discover which will be used for configure Postgres Database in Active-Standby. The Postgres database instance itself is deployed using Zalando operator here. A  simple Spring Boot application in created and deployed to demostrate the Active-Active mode. The application is configured to connects to the primary instance of database. The full source code configurations and manfiests are available in this [Github repository](https://github.com/thirumurthis/projects/tree/main/cilium_clustermesh_postgres_spring_app).
 
-This article does not explain all the concepts, to follow the along these steps basic understanding of Kubernetes is required.
+This article does not deep dive into all the concepts, to follow the along basic understanding of Kubernetes concepts will be helpful.
 
-1. Cilium deployment
+1. KinD Cluster creation
   - a. Create clusters (cluster 0 and cluster 1) with kind configuration using KinD CLI.
-  - b. First deploy the Cilium to cluster 0 using the configuration from the Github repo.
-  - c. Copy the cilium-ca secret from cluster 0 to cluster 1.
-  - d. Deploy the Cilium to cluster 1 using the configuration from the Github repo.
-  - e. Cilim metrics are enabled to monitor using Grafana, Prometheus and Hubble UI.
-  - f. Kuberenetes Gateway API is installed to configure Gateways to create HTTPRoute and TCPRoute to access the monitoring UI's.
-2. Database installation
-  - a. Create the namespace to deploy the Postgres using Zalando operator.
+2. Cilium deployment
+  - a. Deoloy the Cilium in cluster 0 (the configuration can be found in Github repo).
+  - b. Copy the cilium-ca secret created by Cilium from cluster 0 to cluster 1.
+  - c. Deploy the Cilium to cluster 1.
+  - d. Cilim metrics are enabled. Grafana, Prometheus and Hubble UI are configured to visualize traffic.
+  - e. Kuberenetes Gateway API installed to create routes used to access the apps from host machine.
+3. Database installation
+  - a. Create namespaces for Zalando operator and Postgres database.
   - b. Deploy the Zalando operator on cluster 0.
   - c. Deploy the Zalando operator on cluster 1.
-  - d. Create secret with password on both clusters, this will be used by Zalando operator when creating Postgres database instance. The name of the secret should match the Zalando operator name format else the operator will creates its own random password.
-  - e. Create Postgres DB instance in cluster 0. This is the primary database.
-  - f. Create Postgres DB instance in cluster 1. This is the standby database, configuration includes standby_host and port.
-  - g. Install TCPRoute route on both clusters to access the Postgres database from host machine.
-3. Spring Boot application
+  - d. Create secret with database password on both clusters. The secret name should match the naming format requiered by the Zalando operator else the operator will creates its own with random password (in this case we need to manually copy those secrets to cluster 1).
+  - e. Deploy Postgres DB instance in cluster 0. This will be primary database.
+  - f. Deploy Postgres DB instance in cluster 1. This will be standby database, configuration includes standby_host and port.
+  - g. Install route on both clusters to access the Postgres database from host machine.
+4. Spring Boot application deployment
   - a. Create secret with Postgres database credentials for the Spring Boot application.
-  - b. Deploy the Spring Boot application with simple API endpoint to access the database.
-  - c. Create the HTTPRoute for application to access the API from the host machine.
-4. Verify access at each step and finally perform switch over of Postgres database.
+  - b. Deploy the Spring Boot application.
+  - c. Create the route for application to access the API from the host machine.
+5. Verify access at each step and finally perform switch over of Postgres database.
 
 
 Steps to switch over postgres database 
   - Initially the Standby cluster needs to be promoted to Active, this is done by patching the Postgres cluster configuration to remove the standby configuration. In this case, the standalone_host and port configuration will be removed. Wait for a moment and then move to next step.
   - Next the Active cluster needs to be demoted to Standby. In this case the standby_host and port configuration needs to be updated using kubectl patch.
 
-The application access should not be interrupted before and after switch over.
+The deployed application doesn't require to be restarted after switch over.
 
-Note, this configuration is not production grade refer the Cilium and Zalando documentation for more details.
+Note, this configuration is NOT production ready refer the Cilium and Zalando documentation for such configurations to harden for security and granular access. For example, the clustermesh communication uses NodePort which is not recommended use LoadBalancer instead.
 
 ### Source code
 
-The manifests configuration used to setup the clusters can be found in the [Github repository](https://github.com/thirumurthis/projects/tree/main/cilium_clustermesh_postgres_spring_app)
+The full configuration and manifests used to setup the multi-cluster environment can be found in this [Github repository](https://github.com/thirumurthis/projects/tree/main/cilium_clustermesh_postgres_spring_app).
 
-The configuration files in the Github repo is structured like below,
+The files in the Github repo are structured like below,
   - File name starting with cluster_0 includes configuration specific for cluster 0.
   - File name starting with cluster_1 includes configuration specific for cluster 1.
   - File name starting with culsters_ is the common configuration for both the clusters.
-  - readme.md file documents the commands to run when cloned and navitaged to the repo folder.
+  - readme.md file includes documents the command when navigated to this path after cloning we can execute each in order to setup everything.
   - spring-app folder contains code for Spring Boot application and manifest to deploy.
 
 The Github repo is configured with predefined values like cluster name, ports. If wanted to update consider below points
@@ -70,10 +72,9 @@ The Github repo is configured with predefined values like cluster name, ports. I
 
 ### Create Kind clusters
 
-The KinD configuration for cluster 0 is shown below, it includes extraPortMappings configured to access apps from host machine.
-The default CNI is disabled in the KinD configuration, the service and pod subnet defined since the Cilium requires different IP address. The default kubeProxy is disabled. 
+The KinD configuration includes extraPortMappings the ports are used to access apps from host machine, the subnet for pod and service defined since the Cilium requires different IP address. 
 
-To use the Cilium proxy, the Cilium configuration needs to be updated with below details. 
+The default kubeProxy is disabled, the Cilium configuration needs to be updated with below details so clusters can communicate. 
 
 ```yaml
 kubeProxyReplacement: true
@@ -81,7 +82,7 @@ k8sServiceHost: cluster-dev0-control-plane  # the docker container name
 k8sServicePort: 6443
 ```
 
-The kind configuration for cluster 0
+KinD configuration for cluster 0
 
 ```yaml
 # file name: cluster_0_kind_config.yaml
@@ -109,13 +110,13 @@ nodes:
   - role: worker
 ```
 
-To apply the kind cluster manifest use below command
+To create the cluster use below command with above kind configuration
 
 ```sh
 kind create cluster --name cluster-dev0 --config cluster_0_kind_config.yaml
 ```
 
-The KinD configuration for cluster 1
+KinD configuration for cluster 1
 
 ```yaml
 # cluster_1_kind_config.yaml
@@ -151,7 +152,7 @@ kind create cluster --name cluster-dev1 --config cluster_1_kind_config.yaml
 
 #### Configure the kubernetes context to variable 
 
-The following command uses the variable for the context and makes the installation easier, when cluster is creatd by KinD the kube config is automatically updates the kube config.
+Kubernetes context is set to variables so the following commands in this article would make the installation easier. When cluster is created the kubernetes config is automatically updated in the kube config file.
 
 ```sh
 CLUSTER0=kind-cluster-dev0
@@ -160,7 +161,9 @@ CLUSTER1=kind-cluster-dev1
 
 ### Create Cilium clustermesh
 
-The common Cilium configuration to be applied to both the cluster, which will be passed as override to the helm command when installing the Cilium clustermesh
+The Cilium configuration that needs to be applied to both the cluster is shown below, the configuration will be passed in helm command as override file.
+
+The clustermesh configuraiton includes the cluster name which we include the control plane docker container name. The clustermesh API server communicates using the node port that is configured. The envoy proxy requires capablities to install the containers which is added in the configuration.
 
 ```yaml
 #file name: clusters_cilium_common_config.yaml
@@ -179,7 +182,7 @@ clustermesh:
 gatewayAPI:
    enabled: true
    hostNetwork:
-    enabled: false # if hostnetwork true only HTTPRoute and HTTPSRoute works, for TCPRoute set to false
+    enabled: false # if true TCPRoute doesn't allow traffic so set to false
 
 kubeProxyReplacement: true
 
@@ -230,7 +233,7 @@ operator:
 
 #### Deploy the Cilium to cluster 0 
 
-The Cilium configuration for cluster 0, which requires a name and id for the cluster. The Cilium creates an agent and api server, the api server uses the NodePort to communicate between cluster. For production environment LoadBalancer is recommended for security reasons. 
+The Cilium clustermesh requires name and id for the clusters. The Cilium creates an agent (cilim pod) and api server. The NodePort will be used for clusermesh api server to communicate between clusters. In production a LoadBalancer is recommended to harden for security. The extraDNSNames configuration is used for tls communication between clusters.
 
 ```yaml
 #file name: cluster_0_cilium_config.yaml
@@ -264,7 +267,7 @@ k8sServiceHost: cluster-dev0-control-plane
 k8sServicePort: 6443
 ```
 
-To deploy the Cilium in the cluster 0, we can use below helm command deploy to the kube-system namespace.
+The Cilium cluster deployed in kube-system namespace using helm chart, below command will install to cluster 0.
 
 ```sh
 helm upgrade -i cilium oci://quay.io/cilium/charts/cilium --version 1.20.2 \
@@ -274,11 +277,11 @@ helm upgrade -i cilium oci://quay.io/cilium/charts/cilium --version 1.20.2 \
     --kube-context $CLUSTER0
 ```
 
-#### Copy the secret from the cluster 0 to cluster 1
+#### Copy the certificate secret from the cluster 0 to cluster 1
 
-This is requires for the clustermesh, so the cluster 0 and cluster 1 communicates with NodePort using common certificate. Note, there are different approach for this step refer the documentation for more details.
+Instead of creating the certificate secret seperately and using it, we let the Cilium to create certificate and copy that. This certificate will be used for clustermesh configuration. This also required for communication between cluster 0 and cluster 1 using common certificate. This is not suitable for production, refer the documents on how to configure securely.
 
-The cilium creates certificate in secret which will be copied over to the cluster 1 in this case
+The certificate secret created can be copied to cluster 1 using below command.
 
 ```bash
 kubectl --context $CLUSTER0 get secret -n kube-system cilium-ca -o yaml | \
@@ -321,7 +324,7 @@ k8sServiceHost: cluster-dev1-control-plane
 k8sServicePort: 6443
 ```
 
-Apply the manfiest using below command
+Helm commmand to install to cluster 1 is shown below
 
 ```sh
 helm upgrade -i cilium oci://quay.io/cilium/charts/cilium --version 1.20.2 \
@@ -333,11 +336,11 @@ helm upgrade -i cilium oci://quay.io/cilium/charts/cilium --version 1.20.2 \
 
 #### Enabling monitoring for Cilium metrics
 
-The configuration for Cilium monitioring was a reference from the [Cilium Example]( `https://raw.githubusercontent.com/cilium/cilium/refs/heads/main/examples/kubernetes/addons/prometheus/monitoring-example.yaml`). The Prometheus and Grafana image is updated in the manfiest.
+The Cilium monitioring configuration is referenced from the [Cilium example in Github repository]( `https://raw.githubusercontent.com/cilium/cilium/refs/heads/main/examples/kubernetes/addons/prometheus/monitoring-example.yaml`). The Prometheus and Grafana image are updated to latest in the manfiest configuration deployed.
 
-Since we use Gateway API configured to access the Grafana and Hubble UI from host machine using HTTPRoute path. The configuration needs to be updated.
+To access the apps from the host machine Kubernetes Gateway API is installed. With the Cilium Gatewayclass configured we can create HTTPRoute to access UI apps using path prefix. Since we use path based routing, the monitoring configuration also needs to be updated.
 
-For Grafana we need to update the environment variable
+For Grafana the monitoring configuration need to include below environment variables
 
 ```yaml
     env:
@@ -347,7 +350,7 @@ For Grafana we need to update the environment variable
         value: "true"
 ```
 
-- Also the Grafana data source we need to update the path
+The Prometheus routing is accessible with http://localhost:8081/prometheus and that path is configured in Grafana data source like below.
 
 ```yaml
     datasources:
@@ -357,7 +360,7 @@ For Grafana we need to update the environment variable
       #...
 ```
 
-The updated monitoring manfiest file can be found in the Git repo. To apply the changes we need to use below command
+The monitoring manfiest file found in Github repo [clusters_cilium_metrics_monitoring.yaml](https://raw.githubusercontent.com/thirumurthis/projects/refs/heads/main/cilium_clustermesh_postgres_spring_app/clusters_cilium_metrics_monitoring.yaml). To apply the changes we need to use below command
 
 ```sh
 kubectl --context $CLUSTER0 -n cilium-monitoring apply -f clusters_cilium_metrics_monitoring.yaml
@@ -367,9 +370,9 @@ kubectl --context $CLUSTER0 -n cilium-monitoring apply -f clusters_cilium_metric
 kubectl --context $CLUSTER1 -n cilium-monitoring apply -f clusters_cilium_metrics_monitoring.yaml
 ```
 
-#### Deploy Gateway API to cluster
+#### Deploy Gateway API on each clusters
 
-To configure the routes to access the application from the host machine we need to deploy the Kuberentes API Gateway to the clusters. Below command will deploy the CRDs on each cluster
+To Kuberentes API Gateway needs to be installed to create routes instead of using the ingress controller, with the Cilium GatewayClassConfig and Gateway defined in the cilium-monitoring namespace we can define routes to access the application from the host machine. Below command deploys the CRD's to each clusters.
 
 ```sh
 kubectl --context $CLUSTER0 apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
@@ -377,10 +380,9 @@ kubectl --context $CLUSTER0 apply --server-side -f https://github.com/kubernetes
 kubectl --context $CLUSTER1 apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml
 ```
 
-Once the Gateway API is installed, we can create GatewayClass and Gateway using the CiliumGawteayClassConfig.
-The configuration below shows GatewayCalssConfig with NodePort in this example. There are other options refer the [Cilium documentation](https://docs.cilium.io/en/latest/network/servicemesh/gateway-api/parameterized-gatewayclass/).
+After installing the Gateway API we can create GatewayClass with cilium controller and CiliumGatewayClassConfig. The Gateway definition defines listener to listen for traffic on 80 and 5432 port of the cluster. The extraPortMappings port will be updated to the NodePort service created by the below Gateway configuration. There are other options refer the [Cilium documentation Gateway parameter](https://docs.cilium.io/en/latest/network/servicemesh/gateway-api/parameterized-gatewayclass/).
 
-Below is the configuration manifest which will deployed to cilium-monitoring namespace where the Grafana and Prometheus is deployed. We can deploy this in any namespace, but the corresponding routes should refer this Gateway name and namespace correctly. The configuration includes two listeners port 80 for HTTP traffic, for Postgres we need TCP traffic. Also in the Cilium, we need to disable the hostnetwork in the GatewayApi configuration, enabling the host network will only allow HTTPRoute traffic.
+Below is the manifest deployed to cilium-monitoring namespace with Grafana and Prometheus used to collect and visualize the metrics from Cilium. The GatewayClass, CiliumGatewayClassConfig and Gateway can be installed in different namespace in that case the route configuration should be updated with the correct Gateway name and the namespace.
 
 ```yaml
 # clusters_gatewayClass.yaml
@@ -433,16 +435,16 @@ spec:
 ---
 ```
 
-To apply this configuration manfiest to cluster 0 and cluster 1, use below command
+To apply the above manfiest to cluster 0 and cluster 1, use below command
 
 ```sh
 kubectl --context $CLUSTER0 apply -f clusters_gatewayClass.yaml
 kubectl --context $CLUSTER1 apply -f clusters_gatewayClass.yaml 
 ```
 
-After applying the Gateway configuration, a NodePort service will be created with random port allowed by the kubernetes in the range of 30000's. Since the KinD configuration extraPortMappings is configured with containerPorts, we need to patch this NodePort service to pass the incoming traffic from the host machine.
+The above gatewayclass configuration will create a NodePort service in this case the name would be cilium-gateway-nodeport-gateway. The NodePort service gets created with random port, this needs to be updated with the port defined in the KinD configuration under extraPortMappings container port. For the http traffic we used 31081 and 31235 for TCP port. After updating the port the incoming traffic from the host machine will be routed as expected.
 
-Below command will patch the NodePort on the created service once cluster 0 and cluster 1, this is necessary since the Cilium Gateway parameter doesn't allow to set those ports statically via configuration. Refer the Cilium GatewayClass parameter documentation. 
+To update the port, we can use below command to patch on cluster 0 and cluster 1. The Cilium Gateway configuration doesn't have a configuration parameter to define this directly in the configuration. Refer the Cilium GatewayClass parameter documentation. 
 
 ```sh
 kubectl --context $CLUSTER0 patch svc cilium-gateway-nodeport-gateway -n cilium-monitoring -p='{"spec":{"ports":[{"port":80,"nodePort":31081},{"port":5432,"nodePort":31235}]}}'
@@ -452,10 +454,10 @@ kubectl --context $CLUSTER0 patch svc cilium-gateway-nodeport-gateway -n cilium-
 kubectl --context $CLUSTER1 patch svc cilium-gateway-nodeport-gateway -n cilium-monitoring -p='{"spec":{"ports":[{"port":80,"nodePort":31082},{"port":5432,"nodePort":31236}]}}'
 ```
 
-With the Gatewayclass configured we can create HTTPRoute for Grafana, Prometheus and Hubble UI. The configuration manfiest is shown below.
+With the Gatewayclass configured, HTTPRoute can be created and installed for Grafana, Prometheus and Hubble UI aoos. The manfiest for routing is shown below.
 
 Info
-  - The Grafana and the Prometheus can be accessed using path. Like http://localhost:8081/grafana, http://localhost:8081/prometheus. 
+  - The Grafana and the Prometheus is configure to be accessed using the URL path. That is we use URL http://localhost:8081/grafana and http://localhost:8081/prometheus access the UI's.
   - The Hubble UI route uses domain based access, to access from hte host machine. Set the host file on with the loopback address `127.0.0.1 hubble.local` and from the browser try http://hubble.local:8081/. 
 
 ```yaml
@@ -526,7 +528,7 @@ kubectl --context $CLUSTER0 apply -f clusters_routes_grafana_prometheus_hubble.y
 kubectl --context $CLUSTER1 apply -f clusters_routes_grafana_prometheus_hubble.yaml
 ```
 
-With the monitoring and routes configured we can access the UI's from host machine.
+With the routes configured we can access the UI's from host machine.
 
 ![Grafana dashboard from host machine, after logged in with default admin/admin credentials](images/grafana_dashboard_logged_in.png)
 
@@ -536,14 +538,16 @@ With the monitoring and routes configured we can access the UI's from host machi
 
 #### Testing service discover with the Cilium clustermesh
 
-For testing we don't need the Monitoring and Gatwayclass configuration is not required. 
+To test the service discovery the Monitoring and Gatwayclass configuration is not required. 
 
-To test the service discovery after configuring the clustermesh
- - The nginx server is deployed only on cluster 1.
- - To access the nginx server from cluster 0. Create service with same name on both the clusters, but cluster 0 service needs to be annotated with  `service.cilium.io/shared:false` since there is no backend.
- - After installing the service when accessing the nginx from cluster 0, we should see the response if the service discovery works.
+We can follow below steps to test the service discovery with configured Cilium clustermesh. 
+ - Deploy the nginx pod on cluster 1.
+ - From cluster 0, we will be accessing the nginx pod.
+ - To access the pod we create service on both clusters with the same name. Since the nginx pod is deployed only on the cluster 0 we need to update the service on cluster 0 with an annotation `service.cilium.io/shared: 
+ "false"` letting Cilium know that there is no backend service on that cluster and route traffic to the other cluster since each service is annotated with `service.cilium.io/global: "true"`.
+ - With the service installed on each cluster, from cluster 0 when accessing the nginx pod on cluster 1 we should see the response if the service discovery works.
 
-The service for cluster 0 for testing the service discovery looks like below, the annotation is added as mentioned above.
+Below is the cluster 0 service used to test the service discovery as mentioned above the annotation is added.
 
 ```yaml
 apiVersion: v1
@@ -562,7 +566,7 @@ spec:
     app: backend
 ```
 
-The service for cluster 1 is listed below
+The service for cluster 1 which includes both the annotation.
 
 ```yaml
 apiVersion: v1
@@ -587,14 +591,14 @@ kubectl --context $CLUSTER0 apply -f cluster_0_test_global_service.yaml
 kubectl --context $CLUSTER1 apply -f cluster_1_test_global_service.yaml 
 ```
 
-The the nginx pod is deployed using kubectl command directly in the cluster 1. The index.html in the nginx pod is updated as shown in below command
+Create a nginx pod using kubectl command directly in the cluster 1. Then update the index.html content. Commands are shown below
 
 ```sh
 kubectl --context $CLUSTER1 run backend-pod --image=nginx:alpine --labels="app=backend"
 kubectl --context $CLUSTER1 exec backend-pod -- sh -c 'echo "hello from cluster1 Network" > /usr/share/nginx/html/index.html'
 ```
 
-Now from cluster 0 execute below command, if service discovery works there should be a response
+Now from cluster 0 we can use curl container to access the nginx pod on the other cluster, if service discovery works there should be a response
 
 ```sh
 kubectl --context $CLUSTER0 run test-client --rm -it --image=curlimages/curl --restart=Never -- curl -s http://multi-cluster-service
@@ -604,16 +608,15 @@ kubectl --context $CLUSTER0 run test-client --rm -it --image=curlimages/curl --r
 
 #### Validating the Cilium clustermesh status
 
-To check the status of the Cilium clustermesh deployment, we need to install the cilium cli. In this case will use an alpine docker container mounted to my local path to test it. This avoids installting the CLI in my local machine. The steps are as follows.
+The status of the clustermesh is verified using Cilium CLI. In below we download the Cilium CLI to a container within the docker. The Cilium CLI can be installed to the machine and verified but to isolate the CLI from local machine using a container. Already the contaier has access to the clusters since it is also deployed in the same network. The steps are as follows.
 
-
-Execute below docker command, the home directory and current working directory is mounted and those files are accessible from within the container.
+Create the container using below command. The home directory and current working directory is mounted which can be accessed within the container.
 
 ```sh
 docker run -it --rm -v ${HOME}:/root -v ${PWD}:/work -w /work --net host alpine sh
 ```
 
-The above command will prompt for user input, execute below commands in order.
+After container is installed it will display a prompt for further inputs, execute below commands on that prompt.
 
 ```sh 
 apk add --no-cache curl 
@@ -634,7 +637,7 @@ mv cilium /usr/local/bin
 rm cilium-linux-${CLI_ARCH}.tar.gz cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
 ```
 
-Above command installs the CLI, to check the status from the same prompt execute below commands one after the other.
+After the CLI is installed, we can check the status using below command with Cilium CLI.
 
 ```sh
 CLUSTER0=kind-cluster-dev0
@@ -662,7 +665,7 @@ kubectl --context $CLUSTER1 create ns postgres
 
 Deploy the zalando operator in both the clusters 
 
-Additional configuration is passed using set this will leave the custom secrets created with password. Rerfer the secrets manfiest below for more information.
+Additionally the helm set includes a configuration so that when the Postgres database cluster is uninstalled the secrets created with password will not be removed by the operator. The database password is created in secret and installed on each cluster the manfiest for the secret is shown in next section.
 
 To deploy in cluster 0
 
@@ -687,9 +690,9 @@ postgres-operator-charts/postgres-operator \
 
 ##### Create secrets for Postgres Database on clusters
 
-During the postgres db creation the operator will create the secret with randomly generated password. This needs to be copied to the other cluster before installing the postgres database on the other cluster. This is mandatory, else the standby cluster will not be able to start in the streaming replication mode.
+By default when installing the Postgres Database instance the operator will create a secret with randomly generated value as password. This secret password needs to be copied to the standby cluster before installing the postgres database in the other cluster else the standby cluster will not be able to authenticate and streaming replication will fail. Copying the secret to the standby cluster is mandatory.
 
-Below is the secret manfiest. Note the zalando operator uses a specific name for the secret creation, if the secret already exists it will use it else will create a new one. In this case we will create the secret ahead of deploying the postgres database cluster itself. Note, the name of the secret is in a defined format and it should match with the one the zalando will create two one for primary `postgres.<cluster-name>.credentials.postgresql.acid.zalan.do` and secondary (`standby.<cluster-name>.credentials.postgresql.acid.zalan.do`). Also the label should match with the postgres cluster configuration. Rerfer [zalando operator documenation](https://opensource.zalando.com/postgres-operator/docs/user.html)
+Note, the secret name should be in the same format as expected by the Zalando operator secret naming template. Zalando operator will create two secrets for primary and standby. The secret name format will be like `{username}.{clustername}.credentials.postgresql.acid.zalan.do` for postgres user it would be `postgres.postgres-cluster.credentials.postgresql.acid.zalan.do` and for standby user `standby.postgres-cluster.credentials.postgresql.acid.zalan.do`. Also the label should match with the postgres cluster configuration. Rerfer [zalando operator documenation](https://opensource.zalando.com/postgres-operator/docs/user.html)
 
 ```yaml
 apiVersion: v1
@@ -761,7 +764,7 @@ spec:
     
     # Enable synchronous replication so 'pg_rewind' won't delete data on switchover
     synchronous_mode: true
-    synchronous_mode_strict: true # Set to false if you want writes to stay unblocked if 2 out of 3 pods crash
+    synchronous_mode_strict: true # Set to false if needed the writes to stay unblocked if 2 out of 3 pods crash
     
     pg_hba: 
       - local replication standby               trust 
@@ -781,7 +784,11 @@ spec:
 kubectl --context $CLUSTER0 -n postgres apply -f cluster_0_postgres_config.yaml
 ```
 
-Check the status of the pod deployed to the cluster 0 using `kubectl --context $CLUSTER0 -n postgres get pods` 
+Check the status of the pod deployed to the cluster 0 using 
+
+```sh
+kubectl --context $CLUSTER0 -n postgres get pods
+``` 
 
 #### Install the Postgres TCPRoute to cluster 0
 
@@ -811,9 +818,9 @@ kubectl --context $CLUSTER0 -n postgres apply -f clusters_tcpRoute_postgres.yaml
 
 #### Install Postgres Database to cluster 1
 
-The manfiest for cluster 1 Postgres cluster configuration manfiest. For standby cluster the Postgres database configuration requires the standby_host and port, in this case since the Cilium clustermesh service discovery will be used and the service name and port is added. 
+Postgres cluster configuration manfiest for cluster 1 is shown below. The standby cluster requires the standby_host and port configured with the primary database in here we configure the service name since the Cilium clustermesh service discovery is available, the standby cluster Postgres container will be able to communicate with the service name. 
 
-Was able to achive the same with KubeVIP (without Cilium clustermesh) internal load balancer since both the cluster are on same docker network are bridged. Below configuration uses Cilium service discovery.
+The streaming replication can be achived without Cilium clustermesh, tried using the KubeVip configured for each pod. The kubeVip creates a Loadbalancer for the Kuberentes cluster, and the IP address and a NodePort was configured in the Postgres configuration standby host and port. This approach is not explained here.
 
 ```yaml
 # file name: cluster_1_postgres_config.yaml
@@ -868,9 +875,11 @@ kubectl --context $CLUSTER1 -n postgres exec pod/postgres-cluster-0 -- patronict
 
 ![Postgres clusters status one each clusters](images/postgres_instance_status.png)
 
-To connect the Postgres DB from host machine in this case using the VSCode extension. 
-With Microsoft PostgresSQL extension installed, use the connection string tab since the port is not default 5432. The connection string looks like below, passing the password in the password text box and try to test connect. Template if connection string is  postgres://[user]:[password]@[host]:[port]/[database_name]
-If needed disable the SSL option in the configuration.
+To connect the Postgres DB from host machine used VSCode extension called Microsoft PostgresSQL.Use the connection string tab and the connection string would look like below. The password is skipped and should be provided in the password text box. 
+
+Connection string general foramt `postgres://[user]:[password]@[host]:[port]/[database_name]`. If needed disable the SSL option in the configuration.
+
+In this case to connect to the primary database instance we use the host port 8085 as configured in the KinD configuration extraPortMappings
 
 ```sh
 postgres://postgres:@127.0.0.1:8085/postgres
@@ -880,14 +889,13 @@ postgres://postgres:@127.0.0.1:8085/postgres
 
 ### Deploying Spring Boot application
 
-A simple JBang Spring Boot application is deployed with the Hikari connection pool configuration, which tracks the primary. The application configuration uses the JDBC url `jdbc:postgresql://127.0.0.1:8081/postgres?targetServerType=primary&hostRecheckSeconds=2` where the `targetServerType=primary`. Refer the [Postgresql documentation](https://jdbc.postgresql.org/documentation/use) for more details.
+To demonstrate the Active-Active mode we create a simple JBang Spring Boot application. The application connected to the database using Hikari connection pool the database url connection string is set with the property to track the primary read-write instance. The Postgres JDBC url for the application looks like this `jdbc:postgresql://127.0.0.1:8081/postgres?targetServerType=primary&hostRecheckSeconds=10` where the `targetServerType=primary` is used to track the primary with the additional timeout properties. Refer the [Postgresql database documentation](https://jdbc.postgresql.org/documentation/use) for more details.
 
-Note, with this configuration observed that sometimes after deploying the application restarts couple of times to be healthy. The logs indicated trying to establish connection to the primary.
+Note, during the application deployment sometimes the app restarts couple of times from the logs could see that the application is trying to connect to the primary database and eventually application became healthy.
 
+#### Building the Application image
 
-#### Building the App image
-
-The folder structure for the application is simple, which will look like below. The App.java includes below java code. The application.yaml is only for local testing. The java uses Jbang runtime options to specify the the path of application.yaml. In Kubernetes the configmap will be mounted to the path. 
+The folder structure of the application is shown below. The App.java includes the java code, application.yaml under config is only for local testing. The Jbang runtime options to specify the the path of application.yaml. In Kubernetes deployment the application.yaml is configured in configmap and mounted to the path so application.yaml is accessible by the Spring context. 
 
 ```
 spring-app
@@ -898,7 +906,9 @@ spring-app
       |- jar.Dockerfile
 ```
 
-The application exposes API to create a product record using POST request and fetch all records from DB using GET request. The HTTPRoute will forward traffic using path http://localhost:8081/my-app/
+The application exposes two API's, one to create a product using POST request and another to fetch all records from DB using GET request. The HTTPRoute will be forwarding traffic to the application which will look like http://localhost:8081/my-app/
+
+The application code App.java
 
 ```java
 ///usr/bin/env jbang "$0" "$@" ; exit $?
@@ -990,15 +1000,15 @@ interface ProductRepository extends JpaRepository<Product, Long> {
 }
 ```
 
-To create the image in local we can use the Dockerfile below. Note, we resolve the dependency ahead of time when we build the image manually in the local machine using JBang CLI.
+Note, the dependency are resolved ahead of the container image creation in the local machine so we can reduce the application start time. The dependency are resolved using JBang CLI.
 
-With the code placed in the appropriate structure, navigate to the folder where app/ and config/ where created and execute below command. The command will create lib folder with dependency jar and App.jar.
+With the code placed in the appropriate structure, navigate to the top level of app folder and execute below command. After execution a lib folder with dependency jar and App.jar will be created.
 
 ```sh
 jbang export portable app/App.java 
 ```
 
-Create the Dockerfile content
+The jar.Dockerfile content which will be used to create the image in local
 
 ```Dockerfile
 FROM eclipse-temurin:25-jre-jammy
@@ -1019,13 +1029,12 @@ To build the image in local use below command, which will create a image with na
 docker build --progress plain -t my-api-app:1.0.1 . -f jar.Dockerfile
 ```
 
-To load the local image to the clusters we need to use kind CLI. The command looks like below. Update the version of the image if updated in the above docker build command.
+To load the local docker image to the KinD clusters use below kind command. Note, we pass the kind cluster name in this case.
 
 ```bash 
 kind load docker-image my-api-app:1.0.1 --name cluster-dev0
 kind load docker-image my-api-app:1.0.1 --name cluster-dev1
 ```
-
 
 #### Deploying the Spring Boot application
 
@@ -1200,28 +1209,28 @@ Check the application pod status on each node with kubectl command.
 
 #### Testing the deployed application
 
-With the sample application deployed, now we can access the API from host machine using curl command.
+With the sample application deployed,the API can be accessed from host machine using curl command. To access the cluster 0 API endpoint the 8081 port is used as configured in kind cluster configuration.
 
-To access the cluster 0 API endpoint we use the 8081 port as we configured in kind cluster configuration.
+POST request to create sample product from cluster 0
 
 ```sh  
 curl -X POST http://localhost:8081/my-app/products -H "Content-Type: application/json"      -d '{"name": "test-01"}'
 ```
 
-To get the product we created we can use GET request like below which will list all the products created
+GET request to get all products from cluster 0
 
 ```sh
 curl http://localhost:8081/my-app/products
 ```
 
-From the cluster 1 which uses the 8082 pod we can use below curl command and should see the same response as above
+GET request to get all prodcuts from the cluster 1 (uses 8082 port)
 
 ```bash
 curl http://localhost:8082/my-app/products
 ```
 
 Info
- The application is configure to utlize the primary data at any point of time which is Active-Active mode on both the cluster. In disaster recovery scenario if one of the cluster needs to be in stanby then we don't expose the traffic to the external world in that case don't install the HTTPRoute for the application.
+ The application is configured to utlize the primary data at any point of time which is Active-Active mode on both the cluster. In disaster recovery scenario if one of the cluster needs to be in standby then we don't expose the traffic to the external world in that case don't install the HTTPRoute for the application.
 
 ### Switch over steps
 
@@ -1261,10 +1270,10 @@ In the application logs we could see the logs indicating the switch over like be
 ```
 
 Points to note
- - During switch over for a moment it is possible that both clusters be in Active-Active mode, eventually postgres cluster will be healthy after switch over is complete. 
+ - During switch over it is possible that both clusters be in Active-Active mode for a moment, eventually postgres cluster will become healthy after switch over is complete. 
  - Postgres utilizes DCS (Distrubted Configuration Storage) in leader election, switch over, etc. 
- - Sometimes switch over might lead to split brain issue where both cluster will be Active-Active with their own leaders. 
-    - To resolve this issue exec into the standby master, use the labels on the pods to identify the master (pod label should say `spilo-role=master`). Perfrom this steps with caution in production like environment.
+ - Sometimes switch over might lead to split brain issue where both cluster will be Active-Active with their own leaders. Refer the documentation for instruction, below worked for me in this setup. But be catious before following this step in production like environment.
+    - To resolve this issue exec into the standby master, use the labels on the pods to identify the master (pod label should say `spilo-role=master`).
     - View the configuratuion of standby master using `patronictl show-config`, if the standby configuration is missing edit the config using `patronictl edit-config` and include the standby configuration shown below to the top and save it.
     ```yaml
     standby_cluster:
