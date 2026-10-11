@@ -656,7 +656,9 @@ cilium clustermesh status --context $CLUSTER1
 
 ### Deploying Postgres database using Zalando operator
 
-Create the zalando and postgres namespace in each cluster. The operator will be deployed in the zalando namespace. Below commands will create the namespaces
+In the synchronoized streaming replica configuration, the replicas would be in read-only mode and data can't be written to those instance. The read-write transcation will be only applicable to the primary database instance.
+
+Create the zalando and postgres namespace in each cluster. The operator will be deployed in the zalando namespace. Below commands will create the namespaces. 
 
 ```sh
 kubectl --context $CLUSTER0 create ns zalando
