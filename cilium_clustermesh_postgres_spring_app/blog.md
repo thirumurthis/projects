@@ -1280,6 +1280,9 @@ Points to note
     - pg_rewind will clean up the local directory and try to sync from the pg_basebackup.
     - After the master is reinit, other pods in the Standby also needs to be re-initalized.
 
+Postgres partonictl status before and after switch over process
+
+![Postgres cluster status on each cluster before and after switch over](images/switch_over_status.png)
 
 Snapshot of API access from curl after switch over
 
