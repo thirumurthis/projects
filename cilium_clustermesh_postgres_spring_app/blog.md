@@ -803,7 +803,7 @@ spec:
           port: 5432
 
 ```
-Apply the TCP route config for the postgres db on CLUSTER 0
+Apply the TCP route config for the postgres db on cluster 0
 
 ```bash
 kubectl --context $CLUSTER0 -n postgres apply -f clusters_tcpRoute_postgres.yaml
