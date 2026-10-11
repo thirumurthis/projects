@@ -22,26 +22,26 @@ Summary of steps to deploy the multi-cluster environment using KinD with cilium 
 
 This article does not explain all the concepts, to follow the along these steps basic understanding of Kubernetes is required.
 
-  1. Cilium deployment
-    - a. Create clusters (cluster 0 and cluster 1) with kind configuration using KinD CLI.
-    - b. First deploy the Cilium to cluster 0 using the configuration from the Github repo.
-    - c. Copy the cilium-ca secret from cluster 0 to cluster 1.
-    - d. Deploy the Cilium to cluster 1 using the configuration from the Github repo.
-    - e. Cilim metrics are enabled to monitor using Grafana, Prometheus and Hubble UI.
-    - f. Kuberenetes Gateway API is installed to configure Gateways to create HTTPRoute and TCPRoute to access the monitoring UI's.
-  2. Database installation
-    - a. Create the namespace to deploy the Postgres using Zalando operator.
-    - b. Deploy the Zalando operator on cluster 0.
-    - c. Deploy the Zalando operator on cluster 1.
-    - d. Create secret with password on both clusters, this will be used by Zalando operator when creating Postgres database instance. The name of the secret should match the Zalando operator name format else the operator will creates its own random password.
-    - e. Create Postgres DB instance in cluster 0. This is the primary database.
-    - f. Create Postgres DB instance in cluster 1. This is the standby database, configuration includes standby_host and port.
-    - g. Install TCPRoute route on both clusters to access the Postgres database from host machine.
-  3. Spring Boot application
-    - a. Create secret with Postgres database credentials for the Spring Boot application.
-    - b. Deploy the Spring Boot application with simple API endpoint to access the database.
-    - c. Create the HTTPRoute for application to access the API from the host machine.
-  4. Verify access at each step and finally perform switch over of Postgres database.
+1. Cilium deployment
+  - a. Create clusters (cluster 0 and cluster 1) with kind configuration using KinD CLI.
+  - b. First deploy the Cilium to cluster 0 using the configuration from the Github repo.
+  - c. Copy the cilium-ca secret from cluster 0 to cluster 1.
+  - d. Deploy the Cilium to cluster 1 using the configuration from the Github repo.
+  - e. Cilim metrics are enabled to monitor using Grafana, Prometheus and Hubble UI.
+  - f. Kuberenetes Gateway API is installed to configure Gateways to create HTTPRoute and TCPRoute to access the monitoring UI's.
+2. Database installation
+  - a. Create the namespace to deploy the Postgres using Zalando operator.
+  - b. Deploy the Zalando operator on cluster 0.
+  - c. Deploy the Zalando operator on cluster 1.
+  - d. Create secret with password on both clusters, this will be used by Zalando operator when creating Postgres database instance. The name of the secret should match the Zalando operator name format else the operator will creates its own random password.
+  - e. Create Postgres DB instance in cluster 0. This is the primary database.
+  - f. Create Postgres DB instance in cluster 1. This is the standby database, configuration includes standby_host and port.
+  - g. Install TCPRoute route on both clusters to access the Postgres database from host machine.
+3. Spring Boot application
+  - a. Create secret with Postgres database credentials for the Spring Boot application.
+  - b. Deploy the Spring Boot application with simple API endpoint to access the database.
+  - c. Create the HTTPRoute for application to access the API from the host machine.
+4. Verify access at each step and finally perform switch over of Postgres database.
 
 
 Steps to switch over postgres database 
