@@ -1,0 +1,26 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: postgres-cluster
+spec:
+  teamId: "postgres"
+  volume:
+    size: 4Gi
+  numberOfInstances: 3
+  postgresql:
+    version: "18"
+
+  standby:
+    standby_host: "postgres-cluster.postgres.svc.cluster.local"
+    standby_port: "5432"
+  patroni:
+    pg_hba: 
+      - local replication standby               trust 
+      - local all         all                   trust   
+      - host  all         all     127.0.0.1/32  trust
+      - host replication  standby all           md5     
+      - host all          all     all           md5
+
+  serviceAnnotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: "none"

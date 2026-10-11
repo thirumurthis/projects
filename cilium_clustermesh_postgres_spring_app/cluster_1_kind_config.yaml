@@ -1,0 +1,23 @@
+# cluster_1_kind_config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+   disableDefaultCNI: true
+   podSubnet: "10.2.0.0/16"
+   serviceSubnet: "10.12.0.0/16"
+   kubeProxyMode: "none"
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 31082
+        hostPort: 8082
+        protocol: TCP
+      - containerPort: 31444
+        hostPort: 8444
+        protocol: TCP
+      - containerPort: 31236
+        hostPort: 8086
+        protocol: TCP
+  - role: worker
+  - role: worker
+  - role: worker

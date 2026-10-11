@@ -1,0 +1,65 @@
+cluster:
+  name: kind-cluster-dev0
+  id: 1
+
+clustermesh:
+  useAPIServer: true
+
+  config:
+    enabled: true
+
+  apiserver:
+    service:
+      #type: LoadBalancer
+      type: NodePort           # clusterMesh Api in this case exposed using NodePort 
+      nodePort: 32379          # all cilium pods from other cluster will reach to this endpoting based on the settings in clustermesh.config.clusters[].address/port
+      annotations: {}
+      # The following annotations are examples. Adapt them to your
+      # environment and context.
+      #
+      # Optional: Have ExternalDNS create the DNS records to
+      # reach this API server. Otherwise, create the same record
+      # through your usual DNS management workflow.
+      # annotations:
+      #   external-dns.alpha.kubernetes.io/hostname: cluster1.example.com
+      #
+      # AKS:
+      # annotations:
+      #   service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+      #
+      # EKS:
+      # annotations:
+      #   service.beta.kubernetes.io/aws-load-balancer-scheme: internal
+      #
+      # GKE:
+      # annotations:
+      #   networking.gke.io/load-balancer-type: Internal
+      #   networking.gke.io/internal-load-balancer-allow-global-access: "true"
+    tls:
+      auto:
+        enabled: true
+        method: cronJob
+        server:
+          extraDnsNames:
+            - cluster-dev0-control-plane
+            - cluster-dev1-control-plane
+
+# since the kubeproxy is disabled we need to use the docker control plane hostname
+k8sServiceHost: cluster-dev0-control-plane
+k8sServicePort: 6443
+
+
+  # Optional Cluster Mesh features that you may find useful:
+  # enableEndpointSliceSynchronization: true
+  # mcsapi:
+  #   enabled: true
+  #   corednsAutoConfigure:
+  #     enabled: true
+
+#ingressController:
+#    enabled: true
+#    ingressController: shared #dedicated #shared  #dedicated other option
+#    service:
+#      type: NodePort
+#      insecureNodePort: 31081
+#      secureNodePort: 31443

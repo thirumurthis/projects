@@ -1,0 +1,74 @@
+clustermesh:
+  config:
+    clusters:
+      kind-cluster-dev0:
+        enabled: true
+        address: cluster-dev0-control-plane
+        port: 32379 
+      kind-cluster-dev1:
+        enabled: true
+        address: cluster-dev1-control-plane
+        port: 32380
+
+gatewayAPI:
+   enabled: true
+   hostNetwork:
+    enabled: false # if hostnetwork true the HTTPRoute and HTTPSRoute works but TCPRoute doesn't work so set to false - with false all works
+   
+   # below can be used in case if we provide different gateway class to use
+   #gatewayClass:
+   #  create: true
+
+kubeProxyReplacement: true
+
+l7Proxy: true
+
+envoy:
+  enabled: true
+  securityContext:
+    capabilities:
+      keepCapNetBindService: true
+      envoy:
+      # Add NET_BIND_SERVICE to the list (keep the others!)
+      - NET_BIND_SERVICE
+      - NET_ADMIN
+      - SYS_ADMIN
+      - BPF
+
+# Mandated for Kind environments so Cilium attaches to the 
+# nested container cgroup layout properly
+cgroup:
+  autoMount: 
+    enabled: true
+  hostRoot: /sys/fs/cgroup
+
+ipam:
+  mode: kubernetes
+
+# check https://docs.cilium.io/en/stable/observability/hubble/setup/#hubble for helm
+hubble:
+  relay: 
+    enabled: true
+  metrics:
+    enableOpenMetrics: true
+    enabled:
+     - dns:query;ignoreAAAA
+     - drop
+     - tcp
+     - flow
+     - icmp
+     - http
+     - https
+  ui:
+    enabled: true
+    #baseUrl: "/hubble"
+    #service:
+      # --- The type of service used for Hubble UI access, either ClusterIP or NodePort.
+      #type: NodePort
+      # --- The port to use when the service type is set to NodePort.
+      #nodePort: 31235
+
+operator:
+  prometheus:
+     enabled: true 
+     port: 6942

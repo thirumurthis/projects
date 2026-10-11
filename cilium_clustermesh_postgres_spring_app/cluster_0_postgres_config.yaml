@@ -1,0 +1,54 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: postgres-cluster
+  namespace: postgres
+spec:
+  teamId: "postgres"
+  numberOfInstances: 3
+  users:
+    zalando:  # database owner
+    - superuser
+    - createdb
+    #foo_user: []  # role for application foo
+  databases:
+    zalando: zalando  # dbname: owner
+  #preparedDatabases:
+  #  bar: {}
+  postgresql:
+    version: "18"
+    parameters:
+       wal_level: "replica"
+       max_wal_senders: "10"
+       # Force standard postgres transactions to wait for synchronous replication verification
+       synchronous_commit: "on"  
+  
+  patroni:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    
+    # Enable synchronous replication so 'pg_rewind' won't delete data on switchover
+    synchronous_mode: true
+    synchronous_mode_strict: true # Set to false if you want writes to stay unblocked if 2 out of 3 pods crash
+    
+    pg_hba: 
+      - local replication standby               trust 
+      - local all         all                   trust   # 3. CRITICAL: Must be trust for internal Patroni tool health checks
+      - host  all         all     127.0.0.1/32  trust
+      - host replication  standby all           md5     # Open to any network, but strictly guarded by a password
+      - host all          all     all           md5     # Open to any network, but strictly guarded by a password
+
+  serviceAnnotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: "none"      
+
+  volume:
+    size: 4Gi
+  #resources:
+  #  requests:
+  #    cpu: "1"
+  #    memory: 2Gi
+  #  limits:
+  #    cpu: "2"
+  #    memory: 5Gi

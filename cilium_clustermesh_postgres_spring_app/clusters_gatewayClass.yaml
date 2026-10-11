@@ -1,0 +1,48 @@
+# get from: https://github.com/cilium/cilium/blob/379936f5c8f95ae82b08718880624bbc34f58798/examples/kubernetes/gateway/gateway-with-parameters.yaml
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: nodeport-gateway-class
+spec:
+  controllerName: io.cilium/gateway-controller #io.cilium/gateway-controller
+  description: The default Cilium GatewayClass
+  parametersRef:
+    group: cilium.io
+    kind: CiliumGatewayClassConfig
+    name: nodeport-gateway-config
+    namespace: cilium-monitoring #kube-system
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumGatewayClassConfig
+metadata:
+  name: nodeport-gateway-config
+  namespace: cilium-monitoring  #kube-system
+spec:
+  service:
+    type: NodePort
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: nodeport-gateway
+  namespace: cilium-monitoring
+spec:
+  gatewayClassName: nodeport-gateway-class
+  listeners:
+    # LISTENER 1: Keep this for Spring Boot app, Grafana, Hubble, etc.
+    - name: web-gw
+      port: 80 #31081
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All  #Same for handling traffic on same namespace
+
+    # LISTENER 2: Add this specifically for  PostgreSQL TCPRoute
+    - name: postgres-gw
+      port: 5432 #31235 # Use the other port from your Kind extraPortMappings
+      protocol: TCP
+      allowedRoutes:
+        namespaces:
+          from: All
+---
