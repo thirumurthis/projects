@@ -21,6 +21,8 @@ Recently had to opportunity to work on similar architecture with totally differe
 
 Summary of deploy the multi-cluster environment using KinD and configure them in clustermesh with Cilium. Once the clustermesh is enabled we can validate the service discover which will be used for configure Postgres Database in Active-Standby. The Postgres database instance itself is deployed using Zalando operator here. A  simple Spring Boot application in created and deployed to demostrate the Active-Active mode. The application is configured to connects to the primary instance of database. The full source code configurations and manfiests are available in this [Github repository](https://github.com/thirumurthis/projects/tree/main/cilium_clustermesh_postgres_spring_app).
 
+![Representation of environment](images/summary_of_env_diagram.png)
+
 This article does not deep dive into all the concepts, to follow the along basic understanding of Kubernetes concepts will be helpful.
 
 1. KinD Cluster creation
