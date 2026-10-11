@@ -1266,7 +1266,7 @@ Points to note
  - Sometimes switch over might lead to split brain issue where both cluster will be Active-Active with their own leaders. 
     - To resolve this issue exec into the standby master, use the labels on the pods to identify the master (pod label should say `spilo-role=master`). Perfrom this steps with caution in production like environment.
     - View the configuratuion of standby master using `patronictl show-config`, if the standby configuration is missing edit the config using `patronictl edit-config` and include the standby configuration shown below to the top and save it.
-    ```
+    ```yaml
     standby_cluster:
         host: "postgres-cluster.postgres.svc.cluster.local" # service discovery url
         port: 5432
@@ -1281,8 +1281,14 @@ Points to note
     - After the master is reinit, other pods in the Standby also needs to be re-initalized.
 
 
+Snapshot of API access from curl after switch over
+
 ![Outputs before and after switch over](images/after_switch_over_test_api_call.png)
 
+Hubble UI showing the traffic flow after accessing application API endpoint using cURL command
+
 ![After accessing the Spring Boot application API endpoint using cURL, the traffic in hubble looks like](images/hubble_ui_spring_app_traffic.png)
+
+Hubble UI showing traffic on the Postgres Database
 
 ![After accessing the endpoints the Postgres the traffic view hubble UI](images/hubble_ui_postgres_traffic.png)
