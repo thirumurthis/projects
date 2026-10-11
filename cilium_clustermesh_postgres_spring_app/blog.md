@@ -57,11 +57,11 @@ Note, this configuration is not production grade refer the Cilium and Zalando do
 The manifests configuration used to setup the clusters can be found in the [Github repository](https://github.com/thirumurthis/projects/tree/main/cilium_clustermesh_postgres_spring_app)
 
 The configuration files in the Github repo is structured like below,
-  - File name starting with cluster_0 includes configuration specific for cluster 0
-  - File name starting with cluster_1 includes configuration specific for cluster 1
-  - File name starting with culsters_ is the common configuration for both the clusters
-  - readme.md file documents the steps with the commands to setup the environment
-  - spring-app folder contains the Spring Boot application code
+  - File name starting with cluster_0 includes configuration specific for cluster 0.
+  - File name starting with cluster_1 includes configuration specific for cluster 1.
+  - File name starting with culsters_ is the common configuration for both the clusters.
+  - readme.md file documents the commands to run when cloned and navitaged to the repo folder.
+  - spring-app folder contains code for Spring Boot application and manifest to deploy.
 
 The Github repo is configured with predefined values like cluster name, ports. If wanted to update consider below points
   - cluster names used are cluster-dev0 and cluster-dev1
