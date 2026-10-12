@@ -698,7 +698,7 @@ postgres-operator-charts/postgres-operator \
 
 By default when installing the Postgres Database instance the operator will create a secret with randomly generated value as password. This secret password needs to be copied to the standby cluster before installing the postgres database in the other cluster else the standby cluster will not be able to authenticate and streaming replication will fail. Copying the secret to the standby cluster is mandatory.
 
-Note, the secret name should be in the same format as expected by the Zalando operator secret naming template. Zalando operator will create two secrets for primary and standby. The secret name format will be like `{username}.{clustername}.credentials.postgresql.acid.zalan.do` for postgres user it would be `postgres.postgres-cluster.credentials.postgresql.acid.zalan.do` and for standby user `standby.postgres-cluster.credentials.postgresql.acid.zalan.do`. Also the label should match with the postgres cluster configuration. Rerfer [zalando operator documenation](https://opensource.zalando.com/postgres-operator/docs/user.html)
+Note, the secret name should be in the same format as expected by the Zalando operator secret naming template. Zalando operator will create two secrets for primary and standby. The secret name format will be like `{username}.{clustername}.credentials.postgresql.acid.zalan.do` for postgres user it would be `postgres.postgres-cluster.credentials.postgresql.acid.zalan.do` and for standby user `standby.postgres-cluster.credentials.postgresql.acid.zalan.do`. Also the label should match with the postgres cluster configuration. Refer [zalando operator documenation](https://opensource.zalando.com/postgres-operator/docs/user.html) for more details
 
 ```yaml
 apiVersion: v1
